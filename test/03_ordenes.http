@@ -1,0 +1,73 @@
+### Casos de prueba · Órdenes y Catálogo (C-10, C-17)
+### Ejecutar previamente: python seed.py
+
+@baseUrl = http://localhost:8000
+
+### C-17: Catálogo de estados de orden (los cuatro por posición, TERMINADA y CANCELADA finales)
+# Esperado: 200 OK
+GET {{baseUrl}}/estados-orden
+
+### C-17: Listado filtrando por estado válido
+# Esperado: 200 OK con items en estado PENDIENTE
+GET {{baseUrl}}/ordenes?estado=PENDIENTE
+
+### C-17: Listado filtrando por estado no declarado en el enum
+# Esperado: 422 Unprocessable Entity
+GET {{baseUrl}}/ordenes?estado=NO_EXISTE
+
+### C-10: Alta de orden con dos ítems (precios copiados, total e historial inicial)
+# Esperado: 201 Created con total = 21500.00 (2 x 8500.00 + 1 x 4500.00)
+POST {{baseUrl}}/ordenes
+Content-Type: application/json
+
+{
+  "vehiculo_id": 2,
+  "falla": "Cambio de bujía y filtro programado",
+  "items": [
+    { "repuesto_id": 1, "cantidad": 2 },
+    { "repuesto_id": 3, "cantidad": 1 }
+  ]
+}
+
+### C-10: Alta de orden con repuesto inexistente
+# Esperado: 409 Conflict y no queda la orden
+POST {{baseUrl}}/ordenes
+Content-Type: application/json
+
+{
+  "vehiculo_id": 2,
+  "falla": "Falla prueba",
+  "items": [
+    { "repuesto_id": 999999, "cantidad": 1 }
+  ]
+}
+
+### C-10: Alta de orden con repuestos repetidos en la lista
+# Esperado: 422 Unprocessable Entity
+POST {{baseUrl}}/ordenes
+Content-Type: application/json
+
+{
+  "vehiculo_id": 2,
+  "falla": "Falla prueba",
+  "items": [
+    { "repuesto_id": 1, "cantidad": 1 },
+    { "repuesto_id": 1, "cantidad": 2 }
+  ]
+}
+
+### Detalle de la orden 1 (con vehículo, cliente, ítems con subtotal e historial)
+# Esperado: 200 OK
+GET {{baseUrl}}/ordenes/1
+
+### Parámetro de ruta no entero (C-01)
+# Esperado: 422 Unprocessable Entity
+GET {{baseUrl}}/ordenes/abc
+
+### Iniciar orden 1 (PENDIENTE -> EN_REPARACION)
+# Esperado: 200 OK con estado EN_REPARACION y mecanico asignado
+POST {{baseUrl}}/ordenes/1/iniciar
+
+### Cancelar orden 3 (PENDIENTE -> CANCELADA)
+# Esperado: 200 OK con estado CANCELADA
+POST {{baseUrl}}/ordenes/3/cancelar

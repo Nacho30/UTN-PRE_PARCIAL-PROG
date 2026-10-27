@@ -1,0 +1,109 @@
+### Casos de prueba · Repuestos y Vehículos (C-16, C-18, C-19)
+### Ejecutar previamente: python seed.py
+
+@baseUrl = http://localhost:8000
+
+### C-16: Búsqueda con inyección SQL (' OR '1'='1)
+# Esperado: 200 OK con items: [] y total: 0
+GET {{baseUrl}}/repuestos?q=' OR '1'='1
+
+### C-16: Paginación con filtro q=freno y size=1
+# Esperado: 200 OK con total: 1, page: 1, pages: 1
+GET {{baseUrl}}/repuestos?q=freno&size=1
+
+### C-16: Paginación fuera de rango
+# Esperado: 422 Unprocessable Entity con «La página 3 no existe: hay 2»
+GET {{baseUrl}}/repuestos?size=2&page=3
+
+### C-16: Tamaño fuera de rango (size=500)
+# Esperado: 422 Unprocessable Entity
+GET {{baseUrl}}/repuestos?size=500
+
+### C-16: PATCH del stock
+# Esperado: 422 Unprocessable Entity (extra="forbid")
+PATCH {{baseUrl}}/repuestos/1
+Content-Type: application/json
+
+{
+  "stock": 999
+}
+
+### C-16 y C-18: PATCH cambiando el precio
+# Esperado: 200 OK; agrega fila en historial de precios
+PATCH {{baseUrl}}/repuestos/1
+Content-Type: application/json
+
+{
+  "precio": "9200.00"
+}
+
+### C-18: PATCH posterior cambiando sólo la descripción
+# Esperado: 200 OK; no agrega fila en historial de precios
+PATCH {{baseUrl}}/repuestos/1
+Content-Type: application/json
+
+{
+  "descripcion": "Filtro de aceite Bosch Premium"
+}
+
+### C-18: Ver historial de precios del repuesto 1
+# Esperado: 200 OK con 2 filas (la del seed de 8000 a 8500 y la de 8500 a 9200)
+GET {{baseUrl}}/repuestos/1/precios
+
+### Reposición de stock
+# Esperado: 200 OK con stock incrementado
+POST {{baseUrl}}/repuestos/1/reponer
+Content-Type: application/json
+
+{
+  "cantidad": 5,
+  "motivo": "Reposición mensual de filtros"
+}
+
+### Ver movimientos de stock del repuesto 1
+# Esperado: 200 OK ordenado descendentemente
+GET {{baseUrl}}/repuestos/1/movimientos
+
+### C-19: Dar de alta un vehículo para Laura (cliente_id: 1)
+# Esperado: 201 Created
+POST {{baseUrl}}/clientes/1/vehiculos
+Content-Type: application/json
+
+{
+  "patente": "af 111 zz",
+  "marca": "Chevrolet",
+  "modelo": "Cruze",
+  "anio": 2021
+}
+
+### C-19: Intento de alta con la misma patente vigente (duplicado)
+# Esperado: 409 Conflict con «Ya existe un vehículo vigente con esa patente»
+POST {{baseUrl}}/clientes/2/vehiculos
+Content-Type: application/json
+
+{
+  "patente": "AF111ZZ",
+  "marca": "Chevrolet",
+  "modelo": "Cruze",
+  "anio": 2021
+}
+
+### C-19: Dar de baja el vehículo sin órdenes abiertas (id: 4)
+# Esperado: 204 No Content
+DELETE {{baseUrl}}/vehiculos/4
+
+### C-19: Reingreso de la misma patente dada de baja para otro cliente (cliente_id: 2)
+# Esperado: 201 Created
+POST {{baseUrl}}/clientes/2/vehiculos
+Content-Type: application/json
+
+{
+  "patente": "AF111ZZ",
+  "marca": "Chevrolet",
+  "modelo": "Cruze",
+  "anio": 2021
+}
+
+### Baja de vehículo con órdenes abiertas (id: 1 tiene orden PENDIENTE)
+# Esperado: 409 Conflict con «No se puede dar de baja un vehículo con órdenes de trabajo abiertas»
+DELETE {{baseUrl}}/vehiculos/1

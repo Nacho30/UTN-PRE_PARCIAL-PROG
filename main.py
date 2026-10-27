@@ -1,8 +1,8 @@
 """Aplicación, lifespan y los dos grupos de rutas.
 
-Grupo ABIERTO: /health (y /auth, en el ejercicio 4). Grupo PROTEGIDO: el resto de los
-módulos; en el ejercicio 5 lleva montado, una sola vez, el control del cambio obligatorio
-de contraseña. FastAPI suma dependencias y no las resta (sección 5.10).
+Grupo ABIERTO: /health (y /auth). Grupo PROTEGIDO: clientes, repuestos, ordenes
+(en el ejercicio 5 lleva montado, una sola vez, el control del cambio obligatorio
+de contraseña. FastAPI suma dependencias y no las resta, sección 5.10).
 """
 
 import logging
@@ -10,14 +10,20 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app import modelos  # noqa: F401  registra todos los modelos antes de configurar los mappers
 from app.core.config import get_settings
 from app.core.database import crear_engine, crear_session_factory
+from app.core.errores import ErrorDominio, traducir_integrity_error
 from app.core.security import hash_password
+from app.modules.clientes.router import router as clientes_router
 from app.modules.health.router import router as health_router
+from app.modules.ordenes.router import router as ordenes_router
+from app.modules.repuestos.router import router as repuestos_router
+from app.modules.usuarios.router import router as usuarios_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("taller")
@@ -43,9 +49,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Taller mecánico",
     description="Órdenes de trabajo, stock y acceso con FastAPI y PostgreSQL",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(ErrorDominio)
+async def error_dominio_handler(request: Request, exc: ErrorDominio) -> JSONResponse:
+    """Traduce errores de negocio a JSON con su código correspondiente."""
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Traduce violaciones de unicidad o restricciones a 409 con mensaje en castellano (RN-18)."""
+    mensaje = traducir_integrity_error(exc)
+    logger.warning("IntegrityError en %s %s -> %s", request.method, request.url.path, mensaje)
+    return JSONResponse({"detail": mensaje}, status_code=status.HTTP_409_CONFLICT)
 
 
 @app.exception_handler(Exception)
@@ -57,8 +77,12 @@ async def error_no_previsto(request: Request, exc: Exception) -> JSONResponse:
 
 abierto = APIRouter()
 abierto.include_router(health_router)
+abierto.include_router(usuarios_router)
 
-protegido = APIRouter()  # los routers de los módulos se incluyen acá a partir del ejercicio 3
+protegido = APIRouter()
+protegido.include_router(clientes_router)
+protegido.include_router(repuestos_router)
+protegido.include_router(ordenes_router)
 
 app.include_router(abierto)
 app.include_router(protegido)

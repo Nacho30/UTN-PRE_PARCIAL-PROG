@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Avance: 22 / 100 puntos** (ejercicios 1 y 2) + la parte de base del ejercicio 7.
+**Avance: 32 / 100 puntos** (ejercicios 1, 2 y 3) + la parte de base del ejercicio 7.
 
 ## Estado
 
@@ -12,7 +12,7 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 | 1 | [`ej1-proyecto-config`](changes/ej1-proyecto-config) | Proyecto, configuración y ciclo de vida | 8 | — | ✅ Implementado · falta verificar en la máquina |
 | 2 | [`ej2-modelos-migraciones`](changes/ej2-modelos-migraciones) | Modelos, relaciones y migraciones | 14 | ej1 | ✅ Implementado · falta `alembic check` y ciclo de migraciones |
 | 3 | [`ej6-repositorios-uow`](changes/ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ⏳ Change listo, sin implementar |
-| 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ⏳ Change listo, sin implementar |
+| 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado y verificado |
 | 5 | [`ej4-autenticacion`](changes/ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ⏳ Change listo, sin implementar |
 | 6 | [`ej5-autorizacion`](changes/ej5-autorizacion) | Autorización | 14 | ej4 | ⏳ Change listo, sin implementar |
 | 7 | [`ej7-integridad`](changes/ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | 🟡 Disparador hecho (en ej2) · falta el intento de acceso |
@@ -49,7 +49,7 @@ Mientras no estén ej4 y ej5, los endpoints de ej3 se prueban desde `/docs` sin 
 |---|---|---|
 | **H1 · Base de datos** ✅ | ej1, ej2 | La app levanta, `/health`, esquema con Alembic, `seed.py`, C-14 |
 | **H2 · Núcleo de datos** | ej6 | Repositorios, UoW, stock en un único punto |
-| **H3 · API sin seguridad** | ej3 | CRUD completo, paginación, 409/422 propios; C-16, C-17, C-19 |
+| **H3 · API sin seguridad** ✅ | ej3 | CRUD completo, paginación, 409/422 propios; C-16, C-17, C-19 |
 | **H4 · Acceso** | ej4, ej5, ej7 | Login, cookie, roles; C-01 a C-09, C-13 |
 | **H5 · Entrega** | ej8 + evidencias | C-10 a C-15, C-18; capturas de C-14 y C-15; README final |
 

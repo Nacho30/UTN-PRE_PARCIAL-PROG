@@ -33,3 +33,22 @@
 > de los ejercicios, sus dependencias, hitos y estado. Dejá los *changes* de los ejercicios 3 a
 > 8 especificados y con sus tareas pendientes, sin tocar el código, y un `AGENTS.md` con las
 > reglas para trabajar con IA.
+
+
+## TP Unidades 1 a 6 · Taller mecánico · Ejercicio 3
+
+> Implementá el Ejercicio 3 (Contratos y CRUD) del TP siguiendo estrictamente SDD, OpenSpec
+> y el modo Strict TDD.
+>
+> Tareas implementadas:
+> - Base `EntradaEstricta` con `extra="forbid"` y `str_strip_whitespace=True`.
+> - Tipos acotados reutilizables: `IdEntero`, `IdPath`, `texto(n)` sin `\x00`, `Dinero`, normalización de patentes/códigos/emails, y límite de 72 bytes UTF-8 para contraseñas.
+> - Esquemas DTO de entrada y salida por módulo (`usuarios`, `clientes`, `repuestos`, `ordenes`), garantizando que ninguna respuesta exponga `password_hash`.
+> - `PATCH /repuestos/{id}` parcial sólo con `descripcion` y `precio` (`exclude_unset`), rechazando `stock` y `null` explícito con 422, y registrando `HistorialPrecio` en la misma transacción si el precio cambia (RN-20).
+> - Paginación con envoltorio `{items, total, page, size, pages}`, cálculo de páginas y validación de rango (422 si la página no existe).
+> - CRUD completo con arquitectura en capas (`Router -> Service -> UoW -> Repository -> Model`):
+>   - Clientes y vehículos (alta, detalle con vehículos vigentes precargados, baja lógica con verificación de órdenes abiertas RN-16).
+>   - Repuestos (búsqueda con parámetros ligados e `ILIKE` escapado, alta con stock inicial y movimiento, reposición, movimientos, precios).
+>   - Órdenes (alta con precios unitarios copiados de repuestos y cálculo de total en el servidor RN-10, catálogo de estados ordenado por posición, iniciar, terminar con descuento de stock y rollback total si no alcanza RN-13, cancelar).
+> - Traducción de `IntegrityError` a 409 con mensaje legible en castellano sin exponer SQL ni detalles de la base (RN-18).
+> - Manejador 500 genérico sin traza en la respuesta.
