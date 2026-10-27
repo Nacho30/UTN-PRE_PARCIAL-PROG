@@ -6,6 +6,14 @@ consigna es un *change* en `openspec/changes/<ejN-...>/` con su propuesta, sus t
 delta de specs. Al terminar un ejercicio se archiva con `openspec archive <change>`, que
 mueve el delta a `openspec/specs/`.
 
+## Mapa de la documentación
+
+- [Discovery](discovery/README.md): qué se construye y por qué.
+- [Foundations](foundations/README.md): cómo se construye.
+- [Roadmap](roadmap.md): en qué orden y en qué estado está cada ejercicio.
+- [Changes](changes): un change por ejercicio.
+- [Specs](specs/README.md): requisitos vigentes, al archivar.
+
 ## Propósito
 
 API REST asincrónica para el trabajo diario de un taller: recepción da de alta clientes,

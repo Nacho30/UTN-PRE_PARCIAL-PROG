@@ -21,3 +21,15 @@
 > todas las tablas y otra escrita a mano con el disparador de sólo agregado, cada una con un
 > comentario que diga que se leyó antes de aplicarla. Incluí `seed.py`, `env.example`,
 > `requirements.txt`, `test/solo_agregado.sql` y un README con los pasos para levantarlo.
+
+## Artefactos SDD: discovery, foundations y roadmap
+
+> Con la consigna del TP y el diagrama de clases, prepará la capa documental de SDD en
+> `openspec/`: un **discovery** (contexto y actores, dominio con diagrama y glosario, reglas de
+> negocio RN-01 a RN-20 con su garante y su ejercicio, requisitos no funcionales, endpoints de
+> referencia, casos C-01 a C-19 y decisiones con preguntas abiertas), unas **foundations**
+> (stack, arquitectura en capas con quién crea, abre, confirma y cierra, convenciones,
+> seguridad, definición de terminado y el flujo SDD con OpenSpec) y un **roadmap** con el orden
+> de los ejercicios, sus dependencias, hitos y estado. Dejá los *changes* de los ejercicios 3 a
+> 8 especificados y con sus tareas pendientes, sin tocar el código, y un `AGENTS.md` con las
+> reglas para trabajar con IA.

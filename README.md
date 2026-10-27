@@ -14,8 +14,20 @@ Esta entrega cubre:
 Los archivos de los ejercicios siguientes ya están en la estructura, con un docstring que
 indica en qué ejercicio se completan.
 
-Desarrollado con **SDD (Spec-Driven Development)** y OpenSpec: cada ejercicio es un *change*
-en [`openspec/changes/`](openspec/changes) con su propuesta, sus tareas y el delta de specs.
+## SDD (Spec-Driven Development)
+
+El proyecto se desarrolla con SDD y OpenSpec. La documentación vive en [`openspec/`](openspec):
+
+| Artefacto | Qué responde |
+|---|---|
+| [`discovery/`](openspec/discovery/README.md) | **Qué** construir: contexto, actores, dominio, reglas RN-01 a RN-20, RNF, endpoints, casos C-01 a C-19, decisiones |
+| [`foundations/`](openspec/foundations/README.md) | **Cómo** construir: stack, arquitectura en capas, convenciones, seguridad, calidad y flujo SDD |
+| [`roadmap.md`](openspec/roadmap.md) | **En qué orden**: ejercicios, dependencias, hitos y estado |
+| [`changes/`](openspec/changes) | Un *change* por ejercicio (ej1 a ej8): propuesta, diseño, specs y tareas |
+| [`specs/`](openspec/specs/README.md) | Requisitos vigentes (se llena al archivar cada change) |
+
+Los *changes* `ej1` y `ej2` están implementados; `ej3` a `ej8` están especificados y pendientes.
+Las instrucciones para agentes de IA están en [`AGENTS.md`](AGENTS.md).
 
 ## Puesta en marcha desde cero
 
@@ -118,7 +130,8 @@ migrations/                     Alembic, plantilla asincrónica
   versions/0001_esquema_inicial.py   autogenerada, revisada
   versions/0002_solo_agregado.py     escrita a mano
 test/solo_agregado.sql          prueba del disparador
-openspec/                       specs SDD de los ejercicios 1 y 2
+openspec/                       SDD: discovery, foundations, roadmap, changes ej1-ej8, specs
+AGENTS.md                       reglas para trabajar con IA
 ```
 
 ## Decisiones del modelo
