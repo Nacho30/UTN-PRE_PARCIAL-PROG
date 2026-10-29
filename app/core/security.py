@@ -9,8 +9,9 @@ llamada va a `asyncio.to_thread`, y un semáforo limita cuántas corren a la vez
 """
 
 import asyncio
-
+from datetime import UTC, datetime
 import bcrypt
+import jwt
 
 from app.core.config import Settings, get_settings
 
@@ -47,3 +48,26 @@ async def hash_password(password: str, settings: Settings | None = None) -> str:
 async def verificar_password(password: str, password_hash: str) -> bool:
     async with _get_semaforo():
         return await asyncio.to_thread(_verificar_sync, password, password_hash)
+
+
+def crear_token(sub: str, roles: list[str], settings: Settings | None = None) -> str:
+    settings = settings or get_settings()
+    ahora = datetime.now(UTC)
+    payload = {
+        "sub": sub,
+        "iat": ahora.timestamp(),  # float con fracción de segundo
+        "exp": ahora.timestamp() + settings.jwt_expira_segundos,
+        "roles": roles,
+    }
+    return jwt.encode(payload, settings.JWT_SECRET.get_secret_value(), algorithm=settings.JWT_ALGORITHM)
+
+
+def decodificar_token(token: str, settings: Settings | None = None) -> dict:
+    settings = settings or get_settings()
+    return jwt.decode(
+        token,
+        settings.JWT_SECRET.get_secret_value(),
+        algorithms=[settings.JWT_ALGORITHM],
+        options={"require": ["sub", "iat", "exp"]},
+    )
+

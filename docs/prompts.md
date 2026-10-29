@@ -42,7 +42,7 @@
 >
 > Tareas implementadas:
 > - Base `EntradaEstricta` con `extra="forbid"` y `str_strip_whitespace=True`.
-> - Tipos acotados reutilizables: `IdEntero`, `IdPath`, `texto(n)` sin `\x00`, `Dinero`, normalización de patentes/códigos/emails, y límite de 72 bytes UTF-8 para contraseñas.
+> - Tipos acotados reutilizables: `IdEntero`, `IdPath`, `texto(n)` sin `\x00`, `Dinero`, normalización de patentes/codes/emails, y límite de 72 bytes UTF-8 para contraseñas.
 > - Esquemas DTO de entrada y salida por módulo (`usuarios`, `clientes`, `repuestos`, `ordenes`), garantizando que ninguna respuesta exponga `password_hash`.
 > - `PATCH /repuestos/{id}` parcial sólo con `descripcion` y `precio` (`exclude_unset`), rechazando `stock` y `null` explícito con 422, y registrando `HistorialPrecio` en la misma transacción si el precio cambia (RN-20).
 > - Paginación con envoltorio `{items, total, page, size, pages}`, cálculo de páginas y validación de rango (422 si la página no existe).
@@ -52,3 +52,21 @@
 >   - Órdenes (alta con precios unitarios copiados de repuestos y cálculo de total en el servidor RN-10, catálogo de estados ordenado por posición, iniciar, terminar con descuento de stock y rollback total si no alcanza RN-13, cancelar).
 > - Traducción de `IntegrityError` a 409 con mensaje legible en castellano sin exponer SQL ni detalles de la base (RN-18).
 > - Manejador 500 genérico sin traza en la respuesta.
+
+## TP Unidades 1 a 6 · Taller mecánico · Ejercicio 4
+
+> Implementá el Ejercicio 4 (Autenticación) del TP siguiendo estrictamente SDD, OpenSpec y el modo Strict TDD.
+>
+> Tareas a implementar:
+> - Funciones de hash (`hash_password` y `verificar_password`) asincrónicas usando `asyncio.to_thread` bajo un semáforo (`BCRYPT_CONCURRENCIA`) y costo configurable (`BCRYPT_ROUNDS`).
+> - Cálculo del hash **antes** de abrir la transacción de base de datos.
+> - Tipo o validador para campos terminados en bcrypt (`PasswordBcrypt`) que limite a un máximo de 72 bytes UTF-8 (retornando 422 si se excede, considerando que una «ñ» ocupa dos bytes).
+> - Orden estricto del login (RN-08, RN-09): 1) verificación de límite de intentos sobre `intento_acceso` (1 consulta; responde 429 con `Retry-After` sin calcular ningún hash si se superó el límite de 5 intentos fallidos en 60 segundos), 2) verificación contra el hash del usuario o contra un hash ficticio si el correo no existe, tardando lo mismo.
+> - Emisión de JWT con `sub`, `iat` (con fracción de segundo para soportar precisión sin truncar), `exp` y los roles vigentes al emitirlo.
+> - Cookie `access_token` segura: `HttpOnly`, `SameSite=Lax`, `Max-Age` igual a la duración del token y `Secure` configurable desde la configuración, sin incluir el token en el cuerpo de la respuesta del login.
+> - Endpoints de autenticación: `POST /auth/registro` (creando usuario, rol CLIENTE y ficha de cliente en un único UoW según RN-02), `POST /auth/login`, `POST /auth/logout` (borrando la cookie) y `GET /auth/yo` (devolviendo el usuario, sus roles vigentes en base y los que dice el token).
+
+## Archivo del change `ej4-autenticacion`
+- Change archivado exitosamente mediante OpenSpec (`openspec archive ej4-autenticacion --yes`).
+
+

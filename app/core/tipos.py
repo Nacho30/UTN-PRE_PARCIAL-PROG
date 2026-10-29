@@ -90,6 +90,13 @@ PasswordTexto = Annotated[
 ]
 
 
+PasswordBcrypt = Annotated[
+    str,
+    Field(min_length=8),
+    AfterValidator(_validar_max_72_bytes),
+]
+
+
 def normalizar_patente(patente: str) -> str:
     """Mayúsculas sin espacios ni guiones (D-06)."""
     return re.sub(r"[\s\-]", "", patente).upper()
