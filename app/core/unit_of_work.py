@@ -21,4 +21,8 @@ class UnitOfWork:
         if exc_type is not None:
             await self.session.rollback()
         else:
-            await self.session.commit()
+            try:
+                await self.session.commit()
+            except Exception:
+                await self.session.rollback()
+                raise

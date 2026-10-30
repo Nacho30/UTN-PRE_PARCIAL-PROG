@@ -291,3 +291,27 @@ Casos manuales C-06 a C-09: [autorización HTTP](test/02_autorizacion.http).
 Instalar herramientas de prueba en el entorno virtual: `python -m pip install pytest pytest-asyncio httpx`.
 La suite E5 valida explícitamente una base desechable `parcial_*` en puerto 55432 antes de
 usar seed dentro de savepoints: `python -m pytest test_auth.py test_autorizacion.py -q`.
+
+## Ejercicio 6: transacciones y revisión local
+
+Los routers construyen los Unit of Work; los servicios los abren y los repositorios sólo
+hacen `flush`. El UoW revierte también si falla el commit y conserva la sesión de la petición.
+`AccesoUnitOfWork` crea, confirma y cierra su propia sesión para conservar los intentos
+de login aunque se rechace la petición.
+
+El registro exige el documento real y admite teléfono opcional, igual que `ClienteCrear`:
+
+```json
+{"email":"cliente.nuevo@example.com","nombre":"Cliente nuevo","password":"Cliente123!","documento":"40555666","telefono":"2615551234"}
+```
+
+Sin documento responde 422; con documento existente, 409 sin usuario, rol ni ficha parcial.
+El alta de personal conserva su contrato y no exige datos de cliente.
+
+`StockRepository.mover` concentra stock y movimiento mediante UPDATE condicionado. Lo usan
+alta, reposición, terminación y seed. Terminar una orden y cambiar un precio conservan todas
+sus escrituras en un solo bloque, con rollback completo ante un fallo.
+
+Pruebas: `python -m pytest -q --tb=short` en la base desechable configurada (`parcial_*`,
+puerto 55432). Casos manuales: [transacciones HTTP](test/06_transacciones.http).
+Evidencia TDD y límites: [validación local](docs/validacion-ej5-ej6.md).

@@ -35,6 +35,8 @@ def registro_data():
         "email": f"{uuid4().hex[:8]}@test.com",
         "nombre": "Test User",
         "password": "Password123",
+        "documento": uuid4().hex[:16],
+        "telefono": "2615551234",
     }
 
 

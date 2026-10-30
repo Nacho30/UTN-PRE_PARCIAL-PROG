@@ -503,6 +503,7 @@ async def test_alta_cliente_registra_evento(client):
             "email": "alta@test.com",
             "nombre": "Cliente nuevo",
             "password": "Cliente123!",
+            "documento": "40555666",
         },
     )
     assert response.status_code == 201

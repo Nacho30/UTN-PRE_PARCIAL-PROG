@@ -22,6 +22,7 @@ from app.modules.repuestos.models import MovimientoStock, Repuesto
 from app.modules.repuestos.repository import (
     MovimientoStockRepository,
     RepuestoRepository,
+    StockRepository,
 )
 
 
@@ -35,6 +36,7 @@ class OrdenesUnitOfWork(UnitOfWork):
         self.vehiculos = VehiculoRepository(session, Vehiculo)
         self.repuestos = RepuestoRepository(session, Repuesto)
         self.movimientos = MovimientoStockRepository(session, MovimientoStock)
+        self.stock = StockRepository(session)
 
 
 async def get_ordenes_uow(session: AsyncSession = Depends(get_session)) -> OrdenesUnitOfWork:

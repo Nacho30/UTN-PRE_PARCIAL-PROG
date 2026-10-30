@@ -64,6 +64,8 @@ class OrdenTrabajoRepository(BaseRepository[OrdenTrabajo]):
         stmt = (
             select(OrdenTrabajo)
             .where(OrdenTrabajo.id == id)
+            # Refrescar colecciones ya cargadas tras agregar el historial en este UoW.
+            .execution_options(populate_existing=True)
             .options(
                 selectinload(OrdenTrabajo.vehiculo).selectinload(Vehiculo.cliente),
                 selectinload(OrdenTrabajo.items).selectinload(ItemOrden.repuesto),

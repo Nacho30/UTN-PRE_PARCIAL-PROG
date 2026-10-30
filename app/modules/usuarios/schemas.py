@@ -7,10 +7,15 @@ from app.core.tipos import EntradaEstricta, PasswordBcrypt, ahora, texto
 from app.modules.usuarios.models import ROLES_PERSONAL, Rol
 
 
-class RegistroIn(EntradaEstricta):
+class CredencialesCrear(EntradaEstricta):
     email: EmailStr
     nombre: texto(120)
     password: PasswordBcrypt
+
+
+class RegistroIn(CredencialesCrear):
+    documento: texto(20)
+    telefono: texto(30) | None = None
 
 
 class LoginIn(EntradaEstricta):
@@ -32,7 +37,7 @@ class UsuarioActualOut(UsuarioOut):
     debe_cambiar_password: bool
 
 
-class PersonalCrear(RegistroIn):
+class PersonalCrear(CredencialesCrear):
     roles: list[Rol] = Field(min_length=1)
 
     @field_validator("roles")

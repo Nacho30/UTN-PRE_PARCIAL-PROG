@@ -19,7 +19,6 @@ from app.modules.ordenes.schemas import (
     OrdenResumenOut,
 )
 from app.modules.ordenes.unit_of_work import OrdenesUnitOfWork
-from app.modules.repuestos.models import MovimientoStock
 from app.modules.usuarios.models import Rol
 
 
@@ -164,7 +163,8 @@ class OrdenesService:
                 EstadoOrdenCodigo.PENDIENTE
             )
             if not estado_pendiente:
-                raise ErrorConflicto("El catálogo de estados de orden no está cargado")
+                raise ErrorConflicto(
+                    "El catálogo de estados está vacío: falta correr seed.py")
 
             # Verificar vehículo vigente
             vehiculo = await uow.vehiculos.get_by_id(payload.vehiculo_id)
@@ -216,7 +216,7 @@ class OrdenesService:
             )
             await uow.historial.add(historial)
 
-            return await self.obtener_detalle(uow, orden.id)  # type: ignore[arg-type]
+            return self._mapear_detalle(await uow.ordenes.get_detalle(orden.id))
 
     async def iniciar_orden(
         self,
@@ -246,7 +246,7 @@ class OrdenesService:
             )
             await uow.historial.add(historial)
 
-            return await self.obtener_detalle(uow, orden.id)  # type: ignore[arg-type]
+            return self._mapear_detalle(await uow.ordenes.get_detalle(orden.id))
 
     async def terminar_orden(
         self,
@@ -279,16 +279,13 @@ class OrdenesService:
                         f"Stock insuficiente para el repuesto {codigo}"
                     )
 
-                rep.stock -= it.cantidad
-                mov = MovimientoStock(
-                    repuesto_id=rep.id,  # type: ignore[arg-type]
-                    orden_id=orden.id,
-                    usuario_id=usuario_id,
+                await uow.stock.mover(
+                    rep,
                     cantidad=-it.cantidad,
                     motivo=f"Salida por orden #{orden.id}",
+                    usuario_id=usuario_id,
+                    orden_id=orden.id,
                 )
-                await uow.movimientos.add(mov)
-                await uow.repuestos.update(rep)
 
             orden.estado = EstadoOrdenCodigo.TERMINADA
             await uow.ordenes.update(orden)
@@ -301,7 +298,7 @@ class OrdenesService:
             )
             await uow.historial.add(historial)
 
-            return await self.obtener_detalle(uow, orden.id)  # type: ignore[arg-type]
+            return self._mapear_detalle(await uow.ordenes.get_detalle(orden.id))
 
     async def cancelar_orden(
         self,
@@ -336,4 +333,4 @@ class OrdenesService:
             )
             await uow.historial.add(historial)
 
-            return await self.obtener_detalle(uow, orden.id)  # type: ignore[arg-type]
+            return self._mapear_detalle(await uow.ordenes.get_detalle(orden.id))

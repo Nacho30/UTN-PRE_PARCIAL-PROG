@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.database import get_session
 from app.core.dependencies import UsuarioActual, get_usuario_actual, requiere_rol
 from app.core.paginacion import Pagina, ParametrosPagina
 from app.core.security import crear_token
@@ -20,7 +18,9 @@ from app.modules.usuarios.schemas import (
     UsuarioOut,
 )
 from app.modules.usuarios.service import ServiceAuth, UsuariosService
-from app.modules.usuarios.unit_of_work import UsuarioUnitOfWork, get_usuarios_uow
+from app.modules.usuarios.unit_of_work import (
+    AccesoUnitOfWork, UsuarioUnitOfWork, get_acceso_uow, get_usuarios_uow,
+)
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -28,8 +28,10 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
 @router.post(
     "/registro", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED
 )
-async def registrar(data: RegistroIn, session: AsyncSession = Depends(get_session)):
-    return await ServiceAuth.registrar_usuario(session, data)
+async def registrar(
+    data: RegistroIn, uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+):
+    return await ServiceAuth.registrar_usuario(uow, data)
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
@@ -37,9 +39,12 @@ async def login(
     request: Request,
     response: Response,
     data: LoginIn,
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+    acceso: AccesoUnitOfWork = Depends(get_acceso_uow),
 ):
     return await ServiceAuth.login(
-        session_factory=request.app.state.session_factory,
+        uow=uow,
+        acceso=acceso,
         request=request,
         response=response,
         data=data,

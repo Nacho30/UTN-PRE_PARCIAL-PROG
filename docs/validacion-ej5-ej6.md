@@ -54,3 +54,66 @@ reales de movimientos y precios, la ejecución final dio **73 passed** (70 E5 + 
 con sus cinco requisitos. `openspec validate autorizacion --type spec --strict` y
 `git diff --check` también pasaron. El archivo está en
 `openspec/changes/archive/2026-10-30-ej5-autorizacion/`.
+
+## Ejercicio 6 · Repositorios y Unit of Work
+
+- Safety net antes de editar: **73 passed** en 21.96 s, PostgreSQL 18 real y Python 3.13.
+- Se conservaron `BaseRepository`, `SoftDeleteRepository`, los repositorios de entidades
+  existentes y el catálogo de sólo lectura. Se caracterizaron sus operaciones reales sin
+  reescribir comportamiento ya correcto.
+- UoW: RED 2 fallos por no revertir un commit fallido; GREEN 4 casos. No cierra la sesión
+  de petición. Los routers inyectan los UoW; los servicios no los construyen.
+- Stock: RED 4 casos por `StockRepository` ausente; GREEN 8. UPDATE condicionado y
+  movimiento comparten transacción. Otro RED de 4 casos detectó que alta, reposición,
+  terminación y seed aún evitaban ese punto; se conectaron todos y quedaron 16 casos verdes.
+- Registro: RED 4 casos de documento/teléfono y rechazo sin datos reales; GREEN junto al
+  baseline. `documento` obligatorio y `telefono` opcional, como `ClienteCrear`. Personal
+  hereda sólo las credenciales comunes y conserva su contrato sin datos de cliente.
+- Órdenes: RED 4 casos confirmaban dos salidas del mismo UoW por operación. Se eliminó la
+  apertura anidada; el repositorio refresca las colecciones cargadas y la respuesta incluye
+  el historial recién escrito, también al cancelar y terminar.
+- Atomicidad real: stock insuficiente en primer y segundo ítem y fallo final de historial
+  conservan stock, movimientos, estado e historial. Fallo de ficha/evento revierte el registro.
+  Fallo posterior al flush de precio revierte tanto precio como historial; descripción sola
+  no agrega otra línea.
+- Acceso: RED 3 casos de propiedad/inyección; GREEN. Prueba adicional con **dos conexiones
+  PostgreSQL distintas** demuestra que el intento queda confirmado aunque la petición se
+  revierta (rechazo dentro y fuera del bloque de acceso). Sólo se limpia la fila aleatoria de
+  esa prueba, con guardia de base desechable; no se elimina ninguna base.
+- Catálogo: RED 2 casos por mensaje distinto del spec; ahora devuelve el 409 requerido,
+  «El catálogo de estados está vacío: falta correr seed.py», sin escribir órdenes.
+- Suite completa antes del formato: **124 passed** (73 previos y 51 E6), 36.70 s.
+- Verificación final tras formato: **124 passed**, 32.56 s; cuatro advertencias previas.
+- `test/06_transacciones.http` y README actualizados. No se afirma ejecución manual de REST
+  Client. No hay migraciones nuevas ni validación de producción o concurrencia distribuida.
+
+### TDD Cycle Evidence · E6
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 1.1 BaseRepository | `test_persistencia.py` | PostgreSQL | 73/73 | Existente, sin cambio productivo | CRUD y flush verificados | válido + unicidad/rollback | Conservado |
+| 1.2 SoftDeleteRepository | `test_persistencia.py` | PostgreSQL | 73/73 | Existente, sin cambio productivo | 2 casos | IDs distintos, filtro/count/lectura histórica | Conservado |
+| 1.3 UnitOfWork | `test_persistencia.py` | Unit | 73/73 | 2 fallos commit sin rollback | 4 casos | éxito/error de cuerpo/2 errores commit | Mínimo try/rollback |
+| 2.1 usuarios y acceso | `test_persistencia.py` | Unit + HTTP + 2 conexiones PG | 73/73 | 3 fallos propiedad/inyección | Propiedad e inyección verificadas | acceso normal/rechazado, intento sobrevive rollback | Sin imports dinámicos |
+| 2.2 clientes | `test_persistencia.py` | PostgreSQL | 73/73 | Existente, sin cambio productivo | Composición y sesión compartida | clientes + vehículos | Conservado |
+| 2.3 repuestos | `test_persistencia.py` | PostgreSQL | 73/73 | 4 fallos StockRepository ausente | Entradas/salidas y rechazos | cero/insuficiente/FK inválida | Punto único |
+| 2.4 órdenes | `test_persistencia.py` | HTTP + PostgreSQL | 73/73 | 4 fallos de bloque y 2 de catálogo | 4 operaciones en un bloque | historial actualizado + catálogo readonly | Precarga refrescada |
+| 3.1 RN-02 | `test_persistencia.py`, `test_auth.py` | HTTP + PostgreSQL | 73/73 | 4 fallos contrato/ficha | Registro y rollback verificados | teléfono/null; documento repetido; evento falla | UoW inyectado |
+| 3.2 RN-13 | `test_persistencia.py` | HTTP + PostgreSQL | 73/73 | Bloque anidado/punto stock | Estado/stock/movimientos/historial atómicos | éxito, 1.º/2.º insuficiente, fallo final | Sin commits anidados |
+| 3.3 RN-20 | `test_persistencia.py` | HTTP + PostgreSQL | 73/73 | Existente, sin reescritura | Cambio + historial y rollback | fallo tras flush + descripción sola | Conservado |
+| 3.4 RN-14 | `test_persistencia.py` | HTTP + PostgreSQL | 73/73 | 4 operaciones evitaban mover | Alta/reposición/terminación/seed | cantidades positivas/negativas | Stock centralizado |
+
+### Limitaciones previas fuera de este alcance
+
+E4 mantiene dos defectos previos: `contar_fallos_recientes` no aplica `ventana_segundos`,
+y el `Retry-After` escrito en `Response` no se copia al JSONResponse del manejador global
+de `ErrorDominio`. No se corrigieron ni se declara completo ese comportamiento de E4/E7.
+Persisten las advertencias previas de `datetime.utcnow()` y del alcance de loop en pytest.
+
+
+Cierre E6: `openspec instructions apply` confirmó **11/11 tareas**, `state=all_done`.
+`openspec validate ej6-repositorios-uow --strict` pasó y `openspec archive
+ej6-repositorios-uow --yes` sincronizó cinco requisitos en `openspec/specs/persistencia/spec.md`
+y archivó en `openspec/changes/archive/2026-10-30-ej6-repositorios-uow/`. Se reemplazó el
+propósito placeholder que genera el CLI antes de validar estrictamente la especificación
+principal. No se cambiaron los pendientes E7/E8.

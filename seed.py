@@ -25,7 +25,8 @@ from app.core.database import crear_engine, crear_session_factory
 from app.core.security import hash_password
 from app.modules.clientes.models import Cliente, Vehiculo
 from app.modules.ordenes.models import EstadoOrden, HistorialEstadoOrden, ItemOrden, OrdenTrabajo
-from app.modules.repuestos.models import HistorialPrecio, MovimientoStock, Repuesto
+from app.modules.repuestos.models import HistorialPrecio, Repuesto
+from app.modules.repuestos.repository import StockRepository
 from app.modules.usuarios.models import AsignacionRol, EventoSeguridad, Usuario
 
 TABLAS = (
@@ -44,11 +45,16 @@ ESTADOS = [
 USUARIOS = [
     ("admin@example.com", "Ana Admin", "Admin1234!", ["ADMIN"], False),  # id 1
     ("admin2@example.com", "Andrés Admin", "Admin1234!", ["ADMIN"], False),  # id 2
-    ("recepcion@example.com", "Rita Recepción", "Recepcion1234!", ["RECEPCION"], False),  # id 3
-    ("mecanico@example.com", "Mario Mecánico", "Mecanico1234!", ["MECANICO"], False),  # id 4
-    ("mecanico2@example.com", "Marta Mecánica", "Mecanico1234!", ["MECANICO"], False),  # id 5
-    ("cliente@example.com", "Laura Cliente", "Cliente1234!", ["CLIENTE"], False),  # id 6
-    ("nuevo@example.com", "Nicolás Nuevo", "Provisoria1234!", ["MECANICO"], True),  # id 7
+    ("recepcion@example.com", "Rita Recepción",
+     "Recepcion1234!", ["RECEPCION"], False),  # id 3
+    ("mecanico@example.com", "Mario Mecánico",
+     "Mecanico1234!", ["MECANICO"], False),  # id 4
+    ("mecanico2@example.com", "Marta Mecánica",
+     "Mecanico1234!", ["MECANICO"], False),  # id 5
+    ("cliente@example.com", "Laura Cliente",
+     "Cliente1234!", ["CLIENTE"], False),  # id 6
+    ("nuevo@example.com", "Nicolás Nuevo",
+     "Provisoria1234!", ["MECANICO"], True),  # id 7
 ]
 
 
@@ -65,11 +71,13 @@ async def cargar(session: AsyncSession) -> None:
     hashes = await asyncio.gather(*(hash_password(pwd) for _, _, pwd, _, _ in USUARIOS))
     usuarios: dict[str, Usuario] = {}
     for (email, nombre, _, roles, cambiar), password_hash in zip(USUARIOS, hashes, strict=True):
-        usuario = Usuario(email=email, nombre=nombre, password_hash=password_hash, debe_cambiar_password=cambiar)
+        usuario = Usuario(email=email, nombre=nombre,
+                          password_hash=password_hash, debe_cambiar_password=cambiar)
         session.add(usuario)
         await session.flush()
         for rol in roles:
-            session.add(AsignacionRol(usuario_id=usuario.id, rol=rol))  # otorgada_por nulo: SISTEMA
+            # otorgada_por nulo: SISTEMA
+            session.add(AsignacionRol(usuario_id=usuario.id, rol=rol))
         usuarios[email] = usuario
     await session.flush()
     admin = usuarios["admin@example.com"].id
@@ -80,29 +88,34 @@ async def cargar(session: AsyncSession) -> None:
     laura = Cliente(
         usuario_id=usuarios["cliente@example.com"].id, nombre="Laura Cliente", documento="30111222", telefono="1144445555"
     )
-    jorge = Cliente(usuario_id=None, nombre="Jorge Pérez", documento="28999888", telefono="1166667777")
+    jorge = Cliente(usuario_id=None, nombre="Jorge Pérez",
+                    documento="28999888", telefono="1166667777")
     session.add_all([laura, jorge])
     await session.flush()
-    v1 = Vehiculo(cliente_id=laura.id, patente="AB123CD", marca="Ford", modelo="Fiesta", anio=2015)  # id 1
-    v2 = Vehiculo(cliente_id=laura.id, patente="AC456EF", marca="Toyota", modelo="Etios", anio=2018)  # id 2
-    v3 = Vehiculo(cliente_id=jorge.id, patente="AD789GH", marca="Renault", modelo="Kangoo", anio=2012)  # id 3
+    v1 = Vehiculo(cliente_id=laura.id, patente="AB123CD",
+                  marca="Ford", modelo="Fiesta", anio=2015)  # id 1
+    v2 = Vehiculo(cliente_id=laura.id, patente="AC456EF",
+                  marca="Toyota", modelo="Etios", anio=2018)  # id 2
+    v3 = Vehiculo(cliente_id=jorge.id, patente="AD789GH",
+                  marca="Renault", modelo="Kangoo", anio=2012)  # id 3
     session.add_all([v1, v2, v3])
     await session.flush()
 
     # 4. Repuestos. Cada stock inicial queda registrado como un movimiento «Stock inicial».
-    # (En el ejercicio 6 esto pasa a hacerse por el punto único de stock.)
-    filtro = Repuesto(codigo="FIL-001", descripcion="Filtro de aceite", precio=Decimal("8000.00"), stock=10)  # id 1
+    filtro = Repuesto(codigo="FIL-001", descripcion="Filtro de aceite",
+                      precio=Decimal("8000.00"), stock=0)  # id 1
     pastillas = Repuesto(
-        codigo="FRE-010", descripcion="Pastillas de freno delanteras", precio=Decimal("32000.00"), stock=4
+        codigo="FRE-010", descripcion="Pastillas de freno delanteras", precio=Decimal("32000.00"), stock=0
     )  # id 2
-    bujia = Repuesto(codigo="BUJ-200", descripcion="Bujía", precio=Decimal("4500.00"), stock=2)  # id 3
-    aceite = Repuesto(codigo="ACE-530", descripcion="Aceite 5W30 por litro", precio=Decimal("12000.00"), stock=20)  # id 4
+    bujia = Repuesto(codigo="BUJ-200", descripcion="Bujía",
+                     precio=Decimal("4500.00"), stock=0)  # id 3
+    aceite = Repuesto(codigo="ACE-530", descripcion="Aceite 5W30 por litro",
+                      precio=Decimal("12000.00"), stock=0)  # id 4
     session.add_all([filtro, pastillas, bujia, aceite])
     await session.flush()
-    session.add_all(
-        MovimientoStock(repuesto_id=r.id, usuario_id=admin, cantidad=r.stock, motivo="Stock inicial")
-        for r in (filtro, pastillas, bujia, aceite)
-    )
+    stock = StockRepository(session)
+    for repuesto, cantidad in ((filtro, 10), (pastillas, 4), (bujia, 2), (aceite, 20)):
+        await stock.mover(repuesto, cantidad, "Stock inicial", usuario_id=admin)
 
     # 5. Historial de precios: el filtro pasó de 8000 a 8500.
     session.add(
@@ -121,8 +134,10 @@ async def cargar(session: AsyncSession) -> None:
         falla="Service de los 60.000 km",
         total=Decimal("56500.00"),  # 1 × 8500 + 4 × 12000
         items=[
-            ItemOrden(repuesto_id=filtro.id, cantidad=1, precio_unitario=Decimal("8500.00")),
-            ItemOrden(repuesto_id=aceite.id, cantidad=4, precio_unitario=Decimal("12000.00")),
+            ItemOrden(repuesto_id=filtro.id, cantidad=1,
+                      precio_unitario=Decimal("8500.00")),
+            ItemOrden(repuesto_id=aceite.id, cantidad=4,
+                      precio_unitario=Decimal("12000.00")),
         ],
     )
     # La 2, EN_REPARACION, del vehículo de Jorge, asignada a mecanico@, con 4 bujías cuando hay 2.
@@ -132,14 +147,17 @@ async def cargar(session: AsyncSession) -> None:
         estado="EN_REPARACION",
         falla="Falla de encendido en frío",
         total=Decimal("18000.00"),  # 4 × 4500
-        items=[ItemOrden(repuesto_id=bujia.id, cantidad=4, precio_unitario=Decimal("4500.00"))],
+        items=[ItemOrden(repuesto_id=bujia.id, cantidad=4,
+                         precio_unitario=Decimal("4500.00"))],
     )
     session.add_all([orden1, orden2])
     await session.flush()
     session.add_all(
         [
-            HistorialEstadoOrden(orden_id=orden1.id, desde_estado=None, hasta_estado="PENDIENTE", usuario_id=recepcion),
-            HistorialEstadoOrden(orden_id=orden2.id, desde_estado=None, hasta_estado="PENDIENTE", usuario_id=recepcion),
+            HistorialEstadoOrden(orden_id=orden1.id, desde_estado=None,
+                                 hasta_estado="PENDIENTE", usuario_id=recepcion),
+            HistorialEstadoOrden(orden_id=orden2.id, desde_estado=None,
+                                 hasta_estado="PENDIENTE", usuario_id=recepcion),
             HistorialEstadoOrden(
                 orden_id=orden2.id, desde_estado="PENDIENTE", hasta_estado="EN_REPARACION", usuario_id=mecanico
             ),

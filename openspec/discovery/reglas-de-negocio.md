@@ -16,9 +16,9 @@ que la implementa.
 | RN-08 | 5 fallos con el mismo correo e IP en 60 s → 429 sin verificar. Un login correcto reinicia la cuenta | Conteo sobre `intento_acceso`; `Retry-After` | 4 · 7 | ⏳ (tabla e índice listos) |
 | RN-09 | El login responde lo mismo, y tarda lo mismo, exista o no el correo | Mismo mensaje; hash ficticio | 4 | ✅ hecho |
 | RN-10 | La orden nace PENDIENTE, con al menos un ítem y sin repuestos repetidos. Precio copiado del repuesto; total calculado por el servidor | DTO: precio y total nunca viajan en el cuerpo | 3 | ✅ hecho |
-| RN-11 | Transiciones: PENDIENTE→EN_REPARACION (mecánico, queda asignado), EN_REPARACION→TERMINADA (asignado o admin), PENDIENTE→CANCELADA | Servicio; 409 | 3 · 6 | ⏳ |
+| RN-11 | Transiciones: PENDIENTE→EN_REPARACION (mecánico, queda asignado), EN_REPARACION→TERMINADA (asignado o admin), PENDIENTE→CANCELADA | Servicio; 409 | 3 · 6 | ✅ hecho |
 | RN-12 | Cancelan la recepción, el admin o el dueño del vehículo. El permiso se evalúa antes que el estado | Servicio; 403 antes que 409 | 3 · 5 | ✅ hecho |
-| RN-13 | Terminar descuenta el stock de cada ítem, deja un movimiento por salida y una línea de historial. Si un repuesto no alcanza, no queda ninguna escritura | Un solo Unit of Work; 409 | 6 | ⏳ |
+| RN-13 | Terminar descuenta el stock de cada ítem, deja un movimiento por salida y una línea de historial. Si un repuesto no alcanza, no queda ninguna escritura | Un solo Unit of Work; 409 | 6 | ✅ hecho |
 | RN-14 | El stock sólo cambia por movimientos: alta con stock inicial, reposición y terminación. No se edita por PATCH | Punto único de escritura de stock | 3 · 6 | ✅ hecho |
 | RN-15 | `historial_estado_orden`, `movimiento_stock` e `historial_precio_repuesto` son de sólo agregado | Disparador instalado por migración | 2 · 7 | ✅ |
 | RN-16 | Un vehículo o repuesto dado de baja no aparece ni se usa en órdenes nuevas; sus datos se conservan. Un vehículo con órdenes abiertas no se da de baja | Borrado lógico; `es_final`; 409 | 3 · 6 | ✅ hecho |

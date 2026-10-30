@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Estado documental actualizado:** ejercicios 1 a 5 implementados; el ejercicio 6 conserva tareas pendientes. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
+**Estado documental actualizado:** ejercicios 1 a 6 implementados; los ejercicios 5 y 6 están verificados y archivados. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
 
 ## Estado
 
@@ -11,7 +11,7 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 |---|---|---|---|---|---|
 | 1 | [`ej1-proyecto-config`](changes/ej1-proyecto-config) | Proyecto, configuración y ciclo de vida | 8 | — | ✅ Implementado · falta verificar en la máquina |
 | 2 | [`ej2-modelos-migraciones`](changes/ej2-modelos-migraciones) | Modelos, relaciones y migraciones | 14 | ej1 | ✅ Implementado · falta `alembic check` y ciclo de migraciones |
-| 3 | [`ej6-repositorios-uow`](changes/ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ⏳ Change listo, sin implementar |
+| 3 | [`ej6-repositorios-uow`](changes/archive/2026-10-30-ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ✅ Implementado y archivado; atomicidad HTTP + PostgreSQL |
 | 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado y verificado |
 | 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Archivado; login corregido y verificado |
 | 6 | [`ej5-autorizacion`](changes/archive/2026-10-30-ej5-autorizacion) | Autorización | 14 | ej4 | ✅ Implementado y archivado; pruebas HTTP + PostgreSQL |

@@ -80,3 +80,10 @@
 > propio. Conservá los contratos existentes y registrá las extensiones nuevas. Probá los
 > escenarios con PostgreSQL aislado y savepoints, validá y archivá el change, y dejá un commit
 > local para revisión. No hagas push ni PR hasta la confirmación del usuario.
+## 2026-10-30 · Ejercicio 6
+
+Pedido: completar el punto 6 con Active Stack, pruebas antes del código y commit separado,
+sin push ni PR hasta revisión. Se reutilizó `ej6-repositorios-uow`, conservando los
+repositorios ya correctos y completando UoW inyectados, stock centralizado y atomicidad.
+Documento real obligatorio y teléfono opcional como el contrato existente de clientes;
+personal conserva su propio contrato. Evidencia en `docs/validacion-ej5-ej6.md`.
