@@ -57,8 +57,8 @@ El proyecto se desarrolla con **Spec-Driven Development (SDD)** y **OpenSpec**:
 | [`AGENTS.md`](AGENTS.md) | Instrucciones y reglas operativas para agentes de IA |
 
 Estado actual de los *changes*:
-- ✅ `ej1-proyecto-config` (completado)
-- ✅ `ej2-modelos-migraciones` (completado)
+- ✅ `ej1-proyecto-config` (completado y archivado)
+- ✅ `ej2-modelos-migraciones` (completado y archivado)
 - ✅ `ej3-contratos-crud` (completado y validado con `openspec validate ej3-contratos-crud --strict`)
 - ✅ `ej4-autenticacion` (archivado; login corregido y probado).
 - ✅ `ej5-autorizacion` (autorización y propiedad verificadas; ver validación local).
