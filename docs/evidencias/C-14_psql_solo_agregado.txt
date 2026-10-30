@@ -1,0 +1,53 @@
+$ psql -h localhost -p 55432 -U taller -d parcial_taller -f test/solo_agregado.sql   # PostgreSQL 16, después de python seed.py
+--- 1/7 UPDATE historial_estado_orden
+psql:test/solo_agregado.sql:12: ERROR:  historial_estado_orden es de sólo agregado: no se permite UPDATE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 2/7 DELETE historial_estado_orden
+psql:test/solo_agregado.sql:16: ERROR:  historial_estado_orden es de sólo agregado: no se permite DELETE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 3/7 UPDATE movimiento_stock
+psql:test/solo_agregado.sql:20: ERROR:  movimiento_stock es de sólo agregado: no se permite UPDATE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 4/7 DELETE movimiento_stock
+psql:test/solo_agregado.sql:24: ERROR:  movimiento_stock es de sólo agregado: no se permite DELETE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 5/7 UPDATE historial_precio_repuesto
+psql:test/solo_agregado.sql:28: ERROR:  historial_precio_repuesto es de sólo agregado: no se permite UPDATE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 6/7 DELETE historial_precio_repuesto
+psql:test/solo_agregado.sql:32: ERROR:  historial_precio_repuesto es de sólo agregado: no se permite DELETE
+HINT:  Las correcciones se registran como una fila nueva.
+CONTEXT:  PL/pgSQL function rechazar_modificacion() line 3 at RAISE
+--- 7/7 orden con un estado que no está en el catálogo
+psql:test/solo_agregado.sql:36: ERROR:  insert or update on table "orden_trabajo" violates foreign key constraint "fk_orden_trabajo_estado_estado_orden"
+DETAIL:  Key (estado)=(INVENTADO) is not present in table "estado_orden".
+--- control: agregar SÍ se puede (y se revierte para no ensuciar)
+BEGIN
+INSERT 0 1
+ROLLBACK
+--- las filas siguen como estaban
+ id | desde_estado | hasta_estado  
+----+--------------+---------------
+  1 |              | PENDIENTE
+  2 |              | PENDIENTE
+  3 | PENDIENTE    | EN_REPARACION
+(3 rows)
+
+ id | repuesto_id | cantidad |    motivo     
+----+-------------+----------+---------------
+  1 |           1 |       10 | Stock inicial
+  2 |           2 |        4 | Stock inicial
+  3 |           3 |        2 | Stock inicial
+  4 |           4 |       20 | Stock inicial
+(4 rows)
+
+ id | repuesto_id | precio_anterior | precio_nuevo 
+----+-------------+-----------------+--------------
+  1 |           1 |         8000.00 |      8500.00
+(1 row)
+

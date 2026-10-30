@@ -132,40 +132,26 @@ class ServiceAuth:
         momento = ahora_dt or datetime.now(UTC)
         ip = request.client.host if request.client else "0.0.0.0"
 
-        # 1. AccesoUnitOfWork (sesión propia): contar fallos de (email, ip) en 60s posteriores al último éxito
+        # 1. Límite de intentos (RN-08), lo primero y sin calcular ningún hash. Cuesta UNA
+        #    consulta: los fallos de (email, ip) dentro de la ventana y posteriores al último
+        #    éxito, del más nuevo al más viejo, con LIMIT LOGIN_MAX_FALLOS. Si hay tantos como
+        #    el máximo, el último de la lista es el que tiene que salir de la ventana.
         async with acceso:
-            fallos_count = await acceso.intentos.contar_fallos_recientes(
+            fallos = await acceso.intentos.get_fallos_recientes(
                 data.email,
                 ip,
                 settings.LOGIN_VENTANA_SEGUNDOS,
+                limite=settings.LOGIN_MAX_FALLOS,
                 ahora=momento,
             )
-            if fallos_count >= settings.LOGIN_MAX_FALLOS:
-                quinto = await acceso.intentos.get_quinto_fallo(
-                    data.email,
-                    ip,
-                    settings.LOGIN_VENTANA_SEGUNDOS,
-                    ahora=momento,
-                )
-                retry_after = settings.LOGIN_VENTANA_SEGUNDOS
-                if quinto is not None:
-                    cuando_utc = (
-                        quinto.cuando
-                        if quinto.cuando.tzinfo is not None
-                        else quinto.cuando.replace(tzinfo=UTC)
-                    )
-                    ahora_utc = (
-                        momento
-                        if momento.tzinfo is not None
-                        else momento.replace(tzinfo=UTC)
-                    )
-                    delta = (
-                        cuando_utc + timedelta(seconds=settings.LOGIN_VENTANA_SEGUNDOS)
-                    ) - ahora_utc
-                    retry_after = max(1, math.ceil(delta.total_seconds()))
-
-                response.headers["Retry-After"] = str(retry_after)
-                raise ErrorDemasiadosIntentos(retry_after=retry_after)
+        if len(fallos) >= settings.LOGIN_MAX_FALLOS:
+            mas_viejo = fallos[-1].cuando
+            if mas_viejo.tzinfo is None:
+                mas_viejo = mas_viejo.replace(tzinfo=UTC)
+            ahora_utc = momento if momento.tzinfo is not None else momento.replace(tzinfo=UTC)
+            libera_en = mas_viejo + timedelta(seconds=settings.LOGIN_VENTANA_SEGUNDOS)
+            retry_after = max(1, math.ceil((libera_en - ahora_utc).total_seconds()))
+            raise ErrorDemasiadosIntentos(retry_after=retry_after)
 
         # 2. UoW de la petición: leer el usuario por email y sus roles vigentes
         usuario: Usuario | None = None
