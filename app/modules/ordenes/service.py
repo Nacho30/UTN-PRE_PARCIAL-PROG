@@ -1,6 +1,7 @@
 """Servicio del módulo de órdenes de trabajo (reglas de negocio)."""
 
-from app.core.errores import ErrorConflicto, ErrorNoEncontrado
+from app.core.dependencies import UsuarioActual
+from app.core.errores import ErrorConflicto, ErrorNoEncontrado, ErrorPermiso
 from app.core.paginacion import Pagina, ParametrosPagina, calcular_paginacion
 from app.modules.ordenes.models import (
     EstadoOrdenCodigo,
@@ -19,9 +20,36 @@ from app.modules.ordenes.schemas import (
 )
 from app.modules.ordenes.unit_of_work import OrdenesUnitOfWork
 from app.modules.repuestos.models import MovimientoStock
+from app.modules.usuarios.models import Rol
 
 
 class OrdenesService:
+    async def mis_ordenes(
+        self, uow: OrdenesUnitOfWork, usuario_id: int, params: ParametrosPagina
+    ) -> Pagina[OrdenResumenOut]:
+        async with uow:
+            items, total = await uow.ordenes.get_de_usuario(
+                usuario_id, params.page, params.size
+            )
+            page, size, pages = calcular_paginacion(total, params)
+            resumenes = [
+                OrdenResumenOut(
+                    id=o.id,
+                    estado=o.estado,
+                    patente=o.vehiculo.patente,
+                    total=o.total,
+                    creada_en=o.creada_en,
+                    mecanico_id=o.mecanico_id,
+                )
+                for o in items
+            ]
+            return Pagina[OrdenResumenOut](
+                items=resumenes, total=total, page=page, size=size, pages=pages
+            )
+
+    def _es_dueno(self, orden: OrdenTrabajo, usuario_id: int) -> bool:
+        return orden.vehiculo.cliente.usuario_id == usuario_id
+
     async def listar_estados(self, uow: OrdenesUnitOfWork) -> list[EstadoOrdenOut]:
         async with uow:
             estados = await uow.estados.list_all()
@@ -42,7 +70,9 @@ class OrdenesService:
         params: ParametrosPagina,
     ) -> Pagina[OrdenResumenOut]:
         async with uow:
-            items, total = await uow.ordenes.list_paginado(estado, params.page, params.size)
+            items, total = await uow.ordenes.list_paginado(
+                estado, params.page, params.size
+            )
             page, size, pages = calcular_paginacion(total, params)
             resumenes = [
                 OrdenResumenOut(
@@ -63,11 +93,21 @@ class OrdenesService:
                 pages=pages,
             )
 
-    async def obtener_detalle(self, uow: OrdenesUnitOfWork, orden_id: int) -> OrdenDetalleOut:
+    async def obtener_detalle(
+        self, uow: OrdenesUnitOfWork, orden_id: int, actual: UsuarioActual | None = None
+    ) -> OrdenDetalleOut:
         async with uow:
             orden = await uow.ordenes.get_detalle(orden_id)
             if not orden:
                 raise ErrorNoEncontrado(f"No existe la orden con id {orden_id}")
+            if (
+                actual is not None
+                and not set(actual.roles).intersection(
+                    (Rol.ADMIN, Rol.RECEPCION, Rol.MECANICO)
+                )
+                and not self._es_dueno(orden, actual.usuario.id)
+            ):
+                raise ErrorPermiso()
             return self._mapear_detalle(orden)
 
     def _mapear_detalle(self, orden: OrdenTrabajo) -> OrdenDetalleOut:
@@ -120,7 +160,9 @@ class OrdenesService:
     ) -> OrdenDetalleOut:
         async with uow:
             # RN-19: Verificar catálogo de estados
-            estado_pendiente = await uow.estados.get_by_codigo(EstadoOrdenCodigo.PENDIENTE)
+            estado_pendiente = await uow.estados.get_by_codigo(
+                EstadoOrdenCodigo.PENDIENTE
+            )
             if not estado_pendiente:
                 raise ErrorConflicto("El catálogo de estados de orden no está cargado")
 
@@ -134,11 +176,16 @@ class OrdenesService:
             for item_in in payload.items:
                 rep = await uow.repuestos.get_by_id(item_in.repuesto_id)
                 if not rep:
-                    raise ErrorConflicto("Uno o más repuestos no existen o fueron dados de baja")
+                    raise ErrorConflicto(
+                        "Uno o más repuestos no existen o fueron dados de baja"
+                    )
                 repuestos_map[item_in.repuesto_id] = rep
 
             total = sum(
-                (repuestos_map[it.repuesto_id].precio * it.cantidad for it in payload.items),
+                (
+                    repuestos_map[it.repuesto_id].precio * it.cantidad
+                    for it in payload.items
+                ),
                 start=0,
             )
 
@@ -205,12 +252,18 @@ class OrdenesService:
         self,
         uow: OrdenesUnitOfWork,
         orden_id: int,
-        usuario_id: int = 4,
+        usuario_id: int,
+        roles: list[str],
     ) -> OrdenDetalleOut:
         async with uow:
             orden = await uow.ordenes.get_detalle(orden_id)
             if not orden:
                 raise ErrorNoEncontrado(f"No existe la orden con id {orden_id}")
+
+            if Rol.ADMIN not in roles and (
+                Rol.MECANICO not in roles or usuario_id != orden.mecanico_id
+            ):
+                raise ErrorPermiso()
 
             if orden.estado != EstadoOrdenCodigo.EN_REPARACION:
                 raise ErrorConflicto(
@@ -254,12 +307,18 @@ class OrdenesService:
         self,
         uow: OrdenesUnitOfWork,
         orden_id: int,
-        usuario_id: int = 3,
+        usuario_id: int,
+        roles: list[str],
     ) -> OrdenDetalleOut:
         async with uow:
-            orden = await uow.ordenes.get_by_id(orden_id)
+            orden = await uow.ordenes.get_detalle(orden_id)
             if not orden:
                 raise ErrorNoEncontrado(f"No existe la orden con id {orden_id}")
+
+            if not set(roles).intersection(
+                (Rol.ADMIN, Rol.RECEPCION)
+            ) and not self._es_dueno(orden, usuario_id):
+                raise ErrorPermiso()
 
             if orden.estado != EstadoOrdenCodigo.PENDIENTE:
                 raise ErrorConflicto(

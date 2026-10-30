@@ -1,3 +1,7 @@
+## Purpose
+
+Definir la identidad, los permisos vigentes y la administración de roles y contraseñas del taller, conservando el historial de seguridad.
+
 ## ADDED Requirements
 
 ### Requirement: 401 contra 403

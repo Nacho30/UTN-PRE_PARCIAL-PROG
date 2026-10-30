@@ -13,7 +13,16 @@ from app.modules.clientes.unit_of_work import ClientesUnitOfWork
 
 
 class ClientesService:
-    async def crear_cliente(self, uow: ClientesUnitOfWork, payload: ClienteCrear) -> ClienteOut:
+    async def mis_vehiculos(
+        self, uow: ClientesUnitOfWork, usuario_id: int
+    ) -> list[VehiculoOut]:
+        async with uow:
+            filas = await uow.vehiculos.get_de_usuario(usuario_id)
+            return [VehiculoOut.model_validate(fila) for fila in filas]
+
+    async def crear_cliente(
+        self, uow: ClientesUnitOfWork, payload: ClienteCrear
+    ) -> ClienteOut:
         async with uow:
             cliente = Cliente(
                 nombre=payload.nombre,
@@ -29,7 +38,9 @@ class ClientesService:
                 telefono=cliente.telefono,
             )
 
-    async def obtener_cliente(self, uow: ClientesUnitOfWork, cliente_id: int) -> ClienteDetalleOut:
+    async def obtener_cliente(
+        self, uow: ClientesUnitOfWork, cliente_id: int
+    ) -> ClienteDetalleOut:
         async with uow:
             cliente = await uow.clientes.get_detalle(cliente_id)
             if not cliente:
@@ -94,6 +105,8 @@ class ClientesService:
                 raise ErrorNoEncontrado(f"No existe el vehículo con id {vehiculo_id}")
 
             if await uow.vehiculos.tiene_ordenes_abiertas(vehiculo_id):
-                raise ErrorConflicto("No se puede dar de baja un vehículo con órdenes de trabajo abiertas")
+                raise ErrorConflicto(
+                    "No se puede dar de baja un vehículo con órdenes de trabajo abiertas"
+                )
 
             await uow.vehiculos.soft_delete(vehiculo)

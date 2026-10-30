@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Avance: 32 / 100 puntos** (ejercicios 1, 2 y 3) + la parte de base del ejercicio 7.
+**Estado documental actualizado:** ejercicios 1 a 5 implementados; el ejercicio 6 conserva tareas pendientes. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
 
 ## Estado
 
@@ -13,8 +13,8 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 | 2 | [`ej2-modelos-migraciones`](changes/ej2-modelos-migraciones) | Modelos, relaciones y migraciones | 14 | ej1 | ✅ Implementado · falta `alembic check` y ciclo de migraciones |
 | 3 | [`ej6-repositorios-uow`](changes/ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ⏳ Change listo, sin implementar |
 | 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado y verificado |
-| 5 | [`ej4-autenticacion`](changes/ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ⏳ Change listo, sin implementar |
-| 6 | [`ej5-autorizacion`](changes/ej5-autorizacion) | Autorización | 14 | ej4 | ⏳ Change listo, sin implementar |
+| 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Archivado; login corregido y verificado |
+| 6 | [`ej5-autorizacion`](changes/archive/2026-10-30-ej5-autorizacion) | Autorización | 14 | ej4 | ✅ Implementado y archivado; pruebas HTTP + PostgreSQL |
 | 7 | [`ej7-integridad`](changes/ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | 🟡 Disparador hecho (en ej2) · falta el intento de acceso |
 | 8 | [`ej8-lecturas-asincronia`](changes/ej8-lecturas-asincronia) | Lecturas sin N+1 y asincronía | 8 | ej3, ej6 | ⏳ Change listo, sin implementar |
 
@@ -40,8 +40,7 @@ flowchart LR
 - **ej7 después de ej4:** el intento de acceso se anota desde el login.
 - **ej8 al final:** optimiza lecturas que ya existen.
 
-Mientras no estén ej4 y ej5, los endpoints de ej3 se prueban desde `/docs` sin sesión; los casos
-`.http` que necesitan login se habilitan con ej4.
+Los endpoints de negocio ya exigen sesión y permisos de E5. Los casos `.http` usan los usuarios del seed.
 
 ## Hitos
 

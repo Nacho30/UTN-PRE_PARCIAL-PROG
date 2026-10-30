@@ -2,7 +2,7 @@
 
 Trabajo Práctico Integrador de **Programación III** (UTN · Tecnicatura Universitaria en Programación), unidades 1 a 6: *Del objeto a la transacción*.
 
-## Alcance implementado (Ejercicios 1, 2 y 3)
+## Alcance implementado (Ejercicios 1 a 5; ejercicio 6 en revisión)
 
 - **Ejercicio 1 · Proyecto, configuración y ciclo de vida (`ej1-proyecto-config`)**:
   - Estructura obligatoria por módulo funcional (`health`, `usuarios`, `clientes`, `repuestos`, `ordenes`).
@@ -60,7 +60,9 @@ Estado actual de los *changes*:
 - ✅ `ej1-proyecto-config` (completado)
 - ✅ `ej2-modelos-migraciones` (completado)
 - ✅ `ej3-contratos-crud` (completado y validado con `openspec validate ej3-contratos-crud --strict`)
-- ⏳ `ej4-autenticacion`, `ej5-autorizacion`, `ej6-repositorios-uow`, `ej7-integridad`, `ej8-lecturas-asincronia` (especificados, pendientes de cierre)
+- ✅ `ej4-autenticacion` (archivado; login corregido y probado).
+- ✅ `ej5-autorizacion` (autorización y propiedad verificadas; ver validación local).
+- ⏳ `ej6-repositorios-uow`, `ej7-integridad`, `ej8-lecturas-asincronia` (pendientes de cierre).
 
 ---
 
@@ -267,3 +269,25 @@ test/
 openspec/                               Artefactos SDD (discovery, foundations, roadmap, changes ej1-ej8, specs)
 docs/prompts.md                         Registro de prompts utilizados por ejercicio
 ```
+
+
+## Ejercicio 5: autorización y revisión local
+
+Todas las rutas de negocio requieren la cookie `access_token` y una contraseña al día.
+`/health` y `/auth` quedan fuera de ese control; `/auth/yo` y `/auth/cambiar-password`
+requieren identidad válida. Las autorizaciones consultan las asignaciones vigentes en la
+base en cada petición; los roles del token son informativos.
+
+- `POST /usuarios` (ADMIN): `{ "email": "personal@example.com", "nombre": "Personal", "password": "Temporal123!", "roles": ["MECANICO"] }`. Se crea con cambio obligatorio.
+- `GET/POST /usuarios/{id}/roles`, `DELETE /usuarios/{id}/roles/{rol}` (ADMIN).
+  Para asignar: `{ "rol": "MECANICO", "vence_en": "2030-01-01T00:00:00Z" }`; vencimiento opcional, con zona y futuro.
+- `POST /auth/cambiar-password`: `{ "password_actual": "Temporal123!", "password_nueva": "Definitiva123!" }`. Devuelve cookie nueva e invalida inmediatamente las anteriores.
+- `GET /eventos?page=1&size=20` (ADMIN): historial de seguridad paginado.
+- `GET /mis-vehiculos` y `GET /mis-ordenes`: sólo recursos propios, incluso sin el rol CLIENTE.
+- El dueño puede consultar y cancelar su orden; se verifica permiso antes del estado.
+
+Pruebas ejecutadas y límites: [validación local](docs/validacion-ej5-ej6.md).
+Casos manuales C-06 a C-09: [autorización HTTP](test/02_autorizacion.http).
+Instalar herramientas de prueba en el entorno virtual: `python -m pip install pytest pytest-asyncio httpx`.
+La suite E5 valida explícitamente una base desechable `parcial_*` en puerto 55432 antes de
+usar seed dentro de savepoints: `python -m pytest test_auth.py test_autorizacion.py -q`.

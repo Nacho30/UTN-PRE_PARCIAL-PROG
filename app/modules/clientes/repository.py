@@ -10,7 +10,11 @@ from app.modules.ordenes.models import EstadoOrden, OrdenTrabajo
 
 class ClienteRepository(BaseRepository[Cliente]):
     async def get_detalle(self, id: int) -> Cliente | None:
-        stmt = select(Cliente).where(Cliente.id == id).options(selectinload(Cliente.vehiculos))
+        stmt = (
+            select(Cliente)
+            .where(Cliente.id == id)
+            .options(selectinload(Cliente.vehiculos))
+        )
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
@@ -21,6 +25,15 @@ class ClienteRepository(BaseRepository[Cliente]):
 
 
 class VehiculoRepository(SoftDeleteRepository[Vehiculo]):
+    async def get_de_usuario(self, usuario_id: int) -> list[Vehiculo]:
+        stmt = (
+            select(Vehiculo)
+            .join(Cliente)
+            .where(Cliente.usuario_id == usuario_id, Vehiculo.borrado_en.is_(None))
+            .order_by(Vehiculo.id)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get_by_patente_vigente(self, patente: str) -> Vehiculo | None:
         stmt = select(Vehiculo).where(
             Vehiculo.patente == patente,

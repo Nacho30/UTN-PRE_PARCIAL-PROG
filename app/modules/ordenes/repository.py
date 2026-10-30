@@ -1,11 +1,12 @@
 """Repositorios del módulo de órdenes de trabajo."""
 
 from typing import Sequence
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.core.repository import BaseRepository
-from app.modules.clientes.models import Vehiculo
+from app.modules.clientes.models import Cliente, Vehiculo
 from app.modules.ordenes.models import (
     EstadoOrden,
     HistorialEstadoOrden,
@@ -37,6 +38,28 @@ class EstadoOrdenRepository:
 
 
 class OrdenTrabajoRepository(BaseRepository[OrdenTrabajo]):
+    async def get_de_usuario(
+        self, usuario_id: int, page: int, size: int
+    ) -> tuple[list[OrdenTrabajo], int]:
+        filtro = (
+            select(Vehiculo.id).join(Cliente).where(Cliente.usuario_id == usuario_id)
+        )
+        condiciones = OrdenTrabajo.vehiculo_id.in_(filtro)
+        total = (
+            await self.session.execute(
+                select(func.count()).select_from(OrdenTrabajo).where(condiciones)
+            )
+        ).scalar_one()
+        stmt = (
+            select(OrdenTrabajo)
+            .where(condiciones)
+            .options(selectinload(OrdenTrabajo.vehiculo))
+            .order_by(OrdenTrabajo.creada_en.desc(), OrdenTrabajo.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        return list((await self.session.execute(stmt)).scalars().all()), total
+
     async def get_detalle(self, id: int) -> OrdenTrabajo | None:
         stmt = (
             select(OrdenTrabajo)

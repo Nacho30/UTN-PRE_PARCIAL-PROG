@@ -1,0 +1,125 @@
+@base = http://127.0.0.1:8000
+# Ejecutar python seed.py en una base de prueba antes del archivo.
+# Las solicitudes mutan roles/contraseñas de los datos iniciales.
+
+### Sesión ADMIN
+# @name loginAdmin
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"admin@example.com","password":"Admin1234!"}
+
+### Sesión RECEPCION, conservar esta cookie para probar revocación
+# @name loginRecepcion
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"recepcion@example.com","password":"Recepcion1234!"}
+
+### Sesión CLIENTE
+# @name loginCliente
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"cliente@example.com","password":"Cliente1234!"}
+
+### C-06: sin cookie -> 401 (Bearer no se usa)
+# @no-cookie-jar
+GET {{base}}/repuestos
+
+### C-06: cliente autenticado, sin permiso -> 403
+# @no-cookie-jar
+GET {{base}}/repuestos
+Cookie: {{loginCliente.response.headers.Set-Cookie}}
+
+### C-06: vehículos propios -> 200, ids 1 y 2
+# @no-cookie-jar
+GET {{base}}/mis-vehiculos
+Cookie: {{loginCliente.response.headers.Set-Cookie}}
+
+### C-06: orden propia -> 200
+# @no-cookie-jar
+GET {{base}}/ordenes/1
+Cookie: {{loginCliente.response.headers.Set-Cookie}}
+
+### C-06: orden ajena -> 403
+# @no-cookie-jar
+GET {{base}}/ordenes/2
+Cookie: {{loginCliente.response.headers.Set-Cookie}}
+
+### C-07: revocar rol de la sesión abierta -> 200
+# @no-cookie-jar
+DELETE {{base}}/usuarios/3/roles/RECEPCION
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-07: misma cookie de recepción -> 403
+# @no-cookie-jar
+GET {{base}}/repuestos
+Cookie: {{loginRecepcion.response.headers.Set-Cookie}}
+
+### C-07: roles_vigentes vacío, roles_token RECEPCION -> 200
+# @no-cookie-jar
+GET {{base}}/auth/yo
+Cookie: {{loginRecepcion.response.headers.Set-Cookie}}
+
+### C-07: historial conserva fila con revocada_en, vigente=false -> 200
+# @no-cookie-jar
+GET {{base}}/usuarios/3/roles
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-07: vencimiento sin zona -> 422
+# @no-cookie-jar
+POST {{base}}/usuarios/3/roles
+Content-Type: application/json
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+{"rol":"RECEPCION","vence_en":"2030-01-01T00:00:00"}
+
+### C-07: vencimiento pasado -> 422
+# @no-cookie-jar
+POST {{base}}/usuarios/3/roles
+Content-Type: application/json
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+{"rol":"RECEPCION","vence_en":"2000-01-01T00:00:00Z"}
+
+### C-08: un administrador no se revoca su ADMIN -> 409
+# @no-cookie-jar
+DELETE {{base}}/usuarios/1/roles/ADMIN
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-09: usuario con cambio obligatorio
+# @name loginNuevo
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"nuevo@example.com","password":"Provisoria1234!"}
+
+### C-09: protegido -> 403
+# @no-cookie-jar
+GET {{base}}/repuestos
+Cookie: {{loginNuevo.response.headers.Set-Cookie}}
+
+### C-09: cambiar contraseña -> 200, devuelve nueva cookie
+# @name cambioPassword
+# @no-cookie-jar
+POST {{base}}/auth/cambiar-password
+Content-Type: application/json
+Cookie: {{loginNuevo.response.headers.Set-Cookie}}
+
+{"password_actual":"Provisoria1234!","password_nueva":"Definitiva123!"}
+
+### C-09: cookie anterior -> 401
+# @no-cookie-jar
+GET {{base}}/auth/yo
+Cookie: {{loginNuevo.response.headers.Set-Cookie}}
+
+### C-09: cookie nueva -> 200, debe_cambiar_password=false
+# @no-cookie-jar
+GET {{base}}/auth/yo
+Cookie: {{cambioPassword.response.headers.Set-Cookie}}
+
+### Eventos -> 200, actor SISTEMA y operaciones registradas
+# @no-cookie-jar
+GET {{base}}/eventos?page=1&size=20
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}

@@ -70,3 +70,13 @@
 - Change archivado exitosamente mediante OpenSpec (`openspec archive ej4-autenticacion --yes`).
 
 
+
+
+## Ejercicio 5 · Autorización (Active Stack / OPSX)
+
+> Revisá el código existente y la consigna; aplicá únicamente `ej5-autorizacion` con TDD:
+> identidad desde cookie, roles vigentes en base, control de contraseña en el grupo protegido,
+> administración de personal/roles/eventos, contraseña con invalidación inmediata y acceso
+> propio. Conservá los contratos existentes y registrá las extensiones nuevas. Probá los
+> escenarios con PostgreSQL aislado y savepoints, validá y archivá el change, y dejá un commit
+> local para revisión. No hagas push ni PR hasta la confirmación del usuario.

@@ -1,17 +1,33 @@
-from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_session
-from app.core.security import decodificar_token, verificar_password
-from app.modules.usuarios.schemas import LoginIn, RegistroIn, UsuarioOut
-from app.modules.usuarios.service import ServiceAuth
-from app.modules.usuarios.unit_of_work import UsuarioUnitOfWork
-from app.core.errores import ErrorDominio
+from app.core.dependencies import UsuarioActual, get_usuario_actual, requiere_rol
+from app.core.paginacion import Pagina, ParametrosPagina
+from app.core.security import crear_token
+from app.core.tipos import IdPath
+from app.modules.usuarios.models import Rol
+from app.modules.usuarios.schemas import (
+    AsignacionCrear,
+    AsignacionOut,
+    CambiarPasswordIn,
+    EventoOut,
+    LoginIn,
+    PersonalCrear,
+    RegistroIn,
+    UsuarioActualOut,
+    UsuarioOut,
+)
+from app.modules.usuarios.service import ServiceAuth, UsuariosService
+from app.modules.usuarios.unit_of_work import UsuarioUnitOfWork, get_usuarios_uow
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 
-@router.post("/registro", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/registro", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED
+)
 async def registrar(data: RegistroIn, session: AsyncSession = Depends(get_session)):
     return await ServiceAuth.registrar_usuario(session, data)
 
@@ -36,41 +52,89 @@ async def logout(response: Response):
     return await ServiceAuth.logout(response)
 
 
-@router.get("/yo", response_model=UsuarioOut, status_code=status.HTTP_200_OK)
-async def yo(
-    request: Request,
-    access_token: str | None = Cookie(default=None),
-    session: AsyncSession = Depends(get_session),
+@router.get("/yo", response_model=UsuarioActualOut)
+async def yo(actual: UsuarioActual = Depends(get_usuario_actual)) -> UsuarioActualOut:
+    usuario = actual.usuario
+    return UsuarioActualOut(
+        id=usuario.id,
+        email=usuario.email,
+        nombre=usuario.nombre,
+        roles=actual.roles,
+        activo=usuario.activo,
+        roles_vigentes=actual.roles,
+        roles_token=actual.roles_token,
+        debe_cambiar_password=usuario.debe_cambiar_password,
+    )
+
+
+@router.post("/cambiar-password")
+async def cambiar_password(
+    data: CambiarPasswordIn,
+    response: Response,
+    actual: UsuarioActual = Depends(get_usuario_actual),
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
 ):
-    if not access_token:
-        raise ErrorDominio("No autenticado", status.HTTP_401_UNAUTHORIZED)
-    
-    try:
-        payload = decodificar_token(access_token)
-    except Exception:
-        raise ErrorDominio("Token inválido o expirado", status.HTTP_401_UNAUTHORIZED)
+    roles = await usuarios_service.cambiar_password(uow, actual.usuario, data)
+    settings = get_settings()
+    token = crear_token(actual.usuario.email, roles, settings)
+    response.set_cookie(
+        "access_token",
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        max_age=settings.jwt_expira_segundos,
+    )
+    return {"mensaje": "Contraseña actualizada"}
 
-    email = payload.get("sub")
-    roles_token = payload.get("roles", [])
 
-    async with UsuarioUnitOfWork(session) as uow:
-        usuario = await uow.usuarios.get_by_email(email)
-        if not usuario or not usuario.activo:
-            raise ErrorDominio("Usuario no encontrado o inactivo", status.HTTP_401_UNAUTHORIZED)
+personal_router = APIRouter(
+    tags=["Usuarios"], dependencies=[Depends(requiere_rol(Rol.ADMIN))]
+)
+usuarios_service = UsuariosService()
 
-        from sqlalchemy import select
-        from app.modules.usuarios.models import AsignacionRol
-        stmt_roles = select(AsignacionRol.rol).where(
-            AsignacionRol.usuario_id == usuario.id,
-            AsignacionRol.revocada_en.is_(None),
-        )
-        res_roles = await session.execute(stmt_roles)
-        roles_vigentes = list(res_roles.scalars().all())
 
-        return UsuarioOut(
-            id=usuario.id,
-            email=usuario.email,
-            nombre=usuario.nombre,
-            roles=roles_vigentes,
-            activo=usuario.activo,
-        )
+@personal_router.post("/usuarios", response_model=UsuarioOut, status_code=201)
+async def crear_personal(
+    data: PersonalCrear,
+    actual: UsuarioActual = Depends(get_usuario_actual),
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+):
+    return await usuarios_service.crear_personal(uow, data, actual.usuario)
+
+
+@personal_router.get("/usuarios/{id}/roles", response_model=list[AsignacionOut])
+async def historial_roles(
+    id: IdPath, uow: UsuarioUnitOfWork = Depends(get_usuarios_uow)
+):
+    return await usuarios_service.historial_roles(uow, id)
+
+
+@personal_router.post(
+    "/usuarios/{id}/roles", response_model=AsignacionOut, status_code=201
+)
+async def asignar_rol(
+    id: IdPath,
+    data: AsignacionCrear,
+    actual: UsuarioActual = Depends(get_usuario_actual),
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+):
+    return await usuarios_service.asignar_rol(uow, id, data, actual.usuario)
+
+
+@personal_router.delete("/usuarios/{id}/roles/{rol}", response_model=AsignacionOut)
+async def revocar_rol(
+    id: IdPath,
+    rol: Rol,
+    actual: UsuarioActual = Depends(get_usuario_actual),
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+):
+    return await usuarios_service.revocar_rol(uow, id, rol, actual.usuario)
+
+
+@personal_router.get("/eventos", response_model=Pagina[EventoOut])
+async def eventos(
+    params: ParametrosPagina = Depends(),
+    uow: UsuarioUnitOfWork = Depends(get_usuarios_uow),
+):
+    return await usuarios_service.eventos(uow, params)
