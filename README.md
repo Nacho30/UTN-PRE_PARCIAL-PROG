@@ -59,7 +59,7 @@ El proyecto se desarrolla con **Spec-Driven Development (SDD)** y **OpenSpec**:
 Estado actual de los *changes*:
 - ✅ `ej1-proyecto-config` (completado y archivado)
 - ✅ `ej2-modelos-migraciones` (completado y archivado)
-- ✅ `ej3-contratos-crud` (completado y validado con `openspec validate ej3-contratos-crud --strict`)
+- ✅ `ej3-contratos-crud` (completado, validado y archivado)
 - ✅ `ej4-autenticacion` (archivado; login corregido y probado).
 - ✅ `ej5-autorizacion` (autorización y propiedad verificadas; ver validación local).
 - ⏳ `ej6-repositorios-uow`, `ej7-integridad`, `ej8-lecturas-asincronia` (pendientes de cierre).

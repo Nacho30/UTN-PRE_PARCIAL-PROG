@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Estado documental actualizado:** ejercicios 1 a 6 implementados (más el disparador y `AccesoUnitOfWork` del ejercicio 7); los ejercicios 1, 2, 4, 5 y 6 están archivados. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
+**Estado documental actualizado:** ejercicios 1 a 6 implementados y archivados (más el disparador y `AccesoUnitOfWork` del ejercicio 7). Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
 
 ## Estado
 
@@ -12,7 +12,7 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 | 1 | [`ej1-proyecto-config`](changes/archive/2026-10-30-ej1-proyecto-config) | Proyecto, configuración y ciclo de vida | 8 | — | ✅ Implementado y archivado |
 | 2 | [`ej2-modelos-migraciones`](changes/archive/2026-10-30-ej2-modelos-migraciones) | Modelos, relaciones y migraciones | 14 | ej1 | ✅ Implementado y archivado · falta registrar `downgrade base` + `alembic check` (tarea 2.5) |
 | 3 | [`ej6-repositorios-uow`](changes/archive/2026-10-30-ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ✅ Implementado y archivado; atomicidad HTTP + PostgreSQL |
-| 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado y verificado |
+| 4 | [`ej3-contratos-crud`](changes/archive/2026-10-30-ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado, archivado y verificado |
 | 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Implementado, archivado y verificado |
 | 6 | [`ej5-autorizacion`](changes/archive/2026-10-30-ej5-autorizacion) | Autorización | 14 | ej4 | ✅ Implementado y archivado; pruebas HTTP + PostgreSQL |
 | 7 | [`ej7-integridad`](changes/ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | ✅ Disparador y `AccesoUnitOfWork` hechos · falta captura de `psql` |
