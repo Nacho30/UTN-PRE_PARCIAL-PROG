@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Estado documental actualizado:** ejercicios 1 a 6 implementados y archivados (más el disparador y `AccesoUnitOfWork` del ejercicio 7). Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
+**Estado documental actualizado:** ejercicios 1 a 8 implementados y archivados. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md` y `docs/validacion-ej7-ej8.md`.
 
 ## Estado
 
@@ -15,8 +15,8 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 | 4 | [`ej3-contratos-crud`](changes/archive/2026-10-30-ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado, archivado y verificado |
 | 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Implementado, archivado y verificado |
 | 6 | [`ej5-autorizacion`](changes/archive/2026-10-30-ej5-autorizacion) | Autorización | 14 | ej4 | ✅ Implementado y archivado; pruebas HTTP + PostgreSQL |
-| 7 | [`ej7-integridad`](changes/ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | ✅ Disparador y `AccesoUnitOfWork` hechos · falta captura de `psql` |
-| 8 | [`ej8-lecturas-asincronia`](changes/ej8-lecturas-asincronia) | Lecturas sin N+1 y asincronía | 8 | ej3, ej6 | ⏳ Change listo, sin implementar |
+| 7 | [`ej7-integridad`](changes/archive/2026-10-30-ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | ✅ Implementado y archivado; C-14 en PostgreSQL · falta la captura PNG de `psql` |
+| 8 | [`ej8-lecturas-asincronia`](changes/archive/2026-10-30-ej8-lecturas-asincronia) | Lecturas sin N+1 y asincronía | 8 | ej3, ej6 | ✅ Implementado y archivado; C-15 con 6 consultas en 2 y 4 ítems |
 
 ## Por qué este orden
 
@@ -63,8 +63,8 @@ Los endpoints de negocio ya exigen sesión y permisos de E5. Los casos `.http` u
 
 ## Pendientes fuera de los changes
 
-- [ ] Correr en la máquina: `alembic upgrade head` → `downgrade base` → `upgrade head` y `alembic check`.
-- [ ] Captura de `psql` para C-14 (`docs/evidencias/`).
-- [ ] Captura de la consola para C-15 (`docs/evidencias/`).
+- [x] `alembic upgrade head` → `downgrade base` → `upgrade head` y `alembic check` (PostgreSQL 16, 2026-10-30; ver `docs/validacion-ej7-ej8.md`).
+- [ ] Captura (PNG) de `psql` para C-14 (`docs/evidencias/`). La salida en texto ya está en `C-14_psql_solo_agregado.txt`.
+- [x] Fragmento de la consola para C-15: `docs/evidencias/C-15_consultas_detalle.txt` (la consigna acepta captura o fragmento).
 - [ ] Resolver las preguntas abiertas de [`discovery/decisiones.md`](discovery/decisiones.md).
 - [ ] Al cerrar cada change: `openspec archive <change>`.

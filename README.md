@@ -2,7 +2,7 @@
 
 Trabajo Práctico Integrador de **Programación III** (UTN · Tecnicatura Universitaria en Programación), unidades 1 a 6: *Del objeto a la transacción*.
 
-## Alcance implementado (Ejercicios 1 a 5; ejercicio 6 en revisión)
+## Alcance implementado (Ejercicios 1 a 8)
 
 - **Ejercicio 1 · Proyecto, configuración y ciclo de vida (`ej1-proyecto-config`)**:
   - Estructura obligatoria por módulo funcional (`health`, `usuarios`, `clientes`, `repuestos`, `ordenes`).
@@ -62,7 +62,9 @@ Estado actual de los *changes*:
 - ✅ `ej3-contratos-crud` (completado, validado y archivado)
 - ✅ `ej4-autenticacion` (archivado; login corregido y probado).
 - ✅ `ej5-autorizacion` (autorización y propiedad verificadas; ver validación local).
-- ⏳ `ej6-repositorios-uow`, `ej7-integridad`, `ej8-lecturas-asincronia` (pendientes de cierre).
+- ✅ `ej6-repositorios-uow` (archivado).
+- ✅ `ej7-integridad` (archivado; límite de intentos corregido y C-14 verificado en PostgreSQL).
+- ✅ `ej8-lecturas-asincronia` (archivado; C-15 con la misma cantidad de consultas con 2 y 4 ítems).
 
 ---
 
@@ -196,7 +198,18 @@ Además se cargan:
 psql -h localhost -U taller -d taller -f test/solo_agregado.sql
 ```
 
-Verifica los **6 rechazos del disparador** (`UPDATE` y `DELETE` sobre `historial_estado_orden`, `movimiento_stock` e `historial_precio_repuesto`) y el **rechazo por clave foránea** al intentar insertar una orden con un estado inexistente en `estado_orden`.
+Verifica los **6 rechazos del disparador** (`UPDATE` y `DELETE` sobre `historial_estado_orden`, `movimiento_stock` e `historial_precio_repuesto`) y el **rechazo por clave foránea** al intentar insertar una orden con un estado inexistente en `estado_orden`. Salida esperada: [`docs/evidencias/C-14_psql_solo_agregado.txt`](docs/evidencias/C-14_psql_solo_agregado.txt).
+
+### Consultas del detalle de una orden (Caso C-15)
+
+```bash
+SQL_ECHO=true uvicorn main:app
+```
+
+Con la sesión de `admin@example.com`, crear una orden con 2 ítems y otra con 4 y pedir
+`GET /ordenes/{id}` de cada una: la consola muestra la misma cantidad de consultas (6: dos de
+la autenticación y cuatro del detalle). Salida de referencia:
+[`docs/evidencias/C-15_consultas_detalle.txt`](docs/evidencias/C-15_consultas_detalle.txt).
 
 ### 2. Casos de prueba HTTP (`test/*.http`)
 
@@ -315,3 +328,34 @@ sus escrituras en un solo bloque, con rollback completo ante un fallo.
 Pruebas: `python -m pytest -q --tb=short` en la base desechable configurada (`parcial_*`,
 puerto 55432). Casos manuales: [transacciones HTTP](test/06_transacciones.http).
 Evidencia TDD y límites: [validación local](docs/validacion-ej5-ej6.md).
+
+## Ejercicio 7: integridad
+
+- **Sólo agregado (RN-15):** la migración `0002_solo_agregado`, escrita a mano, instala
+  `rechazar_modificacion()` y un disparador `BEFORE UPDATE OR DELETE` en las tres tablas que
+  no se corrigen. Lo rechaza venga de la API, de `psql` o de otro programa.
+- **Intento de acceso en su propia transacción (RN-08, sección 6.8.1):** `AccesoUnitOfWork`
+  abre una sesión propia que confirma siempre, porque el fallo que se quiere contar es el
+  mismo que revierte la petición. Costo declarado en el código: deja filas aunque la petición
+  falle y ocupa una segunda conexión mientras dura el bloque.
+- **Límite de intentos:** una sola consulta (`get_fallos_recientes`) trae los fallos del mismo
+  correo e IP dentro de los últimos 60 s y posteriores al último éxito. Al quinto, el login
+  responde 429 con `Retry-After` (calculado desde el fallo más viejo de la ventana) sin
+  calcular ningún hash.
+
+## Ejercicio 8: lecturas sin N+1 y asincronía
+
+- **Detalle en cuatro consultas fijas:** orden + vehículo + cliente en un JOIN (`joinedload`,
+  muchos-a-uno), ítems, repuestos de todos los ítems en un `IN` e historial (`selectinload`).
+- **Alta y terminación sin lecturas por ítem:** los repuestos se leen todos juntos
+  (`get_vigentes_por_ids`) o se reutiliza la precarga del detalle.
+- **Sin carga perezosa:** todas las relaciones con `lazy="raise_on_sql"`; una prueba lo
+  verifica en todos los mapeos. Todos los handlers son `async def` y bcrypt corre en `to_thread`.
+- **Aviso al cliente:** `app/modules/ordenes/avisos.py`, agendado con `BackgroundTasks` en el
+  router sólo cuando el servicio ya confirmó; corre después de enviar la respuesta
+  (`await asyncio.sleep(0.5)` y un mensaje en el registro `taller.avisos`).
+  Evidencia: [`docs/evidencias/C-12_aviso_segundo_plano.txt`](docs/evidencias/C-12_aviso_segundo_plano.txt).
+- `SQL_ECHO=true` muestra cada consulta una vez.
+
+Pruebas: `python -m pytest test_integridad.py test_lecturas.py -q` (misma base desechable
+`parcial_*`, puerto 55432). Evidencia y límites: [validación E7 y E8](docs/validacion-ej7-ej8.md).

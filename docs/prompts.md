@@ -86,3 +86,14 @@ sin push ni PR hasta revisión. Se reutilizó `ej6-repositorios-uow`, conservand
 repositorios ya correctos y completando UoW inyectados, stock centralizado y atomicidad.
 Documento real obligatorio y teléfono opcional como el contrato existente de clientes;
 personal conserva su propio contrato. Evidencia en `docs/validacion-ej5-ej6.md`.
+
+## 2026-10-30 · Ejercicios 7 y 8
+
+> Haceme por favor los puntos 7 y 8 de este trabajo práctico y subilos a este repositorio.
+> Los commits hacelos con mi usuario.
+
+Se trabajó con los changes `ej7-integridad` y `ej8-lecturas-asincronia`, pruebas antes del
+código contra PostgreSQL 16 real. En E7, sobre la corrección de RN-08 del commit `7dcb823`,
+el 429 quedó en una sola consulta y se agregaron las pruebas del disparador y del límite. En
+E8, detalle en cuatro consultas fijas, alta y terminación sin lecturas por ítem, aviso en
+`BackgroundTasks` y `SQL_ECHO` sin duplicados. Evidencia en `docs/validacion-ej7-ej8.md`.
