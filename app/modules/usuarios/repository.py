@@ -1,9 +1,16 @@
-from datetime import datetime
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+"""Repositorios del módulo de usuarios, roles, intentos de acceso y eventos."""
+
+from datetime import UTC, datetime, timedelta
+from sqlalchemy import func, or_, select
 
 from app.core.repository import BaseRepository
-from app.modules.usuarios.models import AsignacionRol, EventoSeguridad, IntentoAcceso, Usuario
+from app.modules.usuarios.models import (
+    AsignacionRol,
+    EventoSeguridad,
+    IntentoAcceso,
+    Rol,
+    Usuario,
+)
 
 
 class UsuarioRepository(BaseRepository[Usuario]):
@@ -14,77 +21,129 @@ class UsuarioRepository(BaseRepository[Usuario]):
 
 
 class AsignacionRolRepository(BaseRepository[AsignacionRol]):
-    pass
+    async def get_roles_vigentes(
+        self,
+        usuario_id: int,
+        ahora: datetime | None = None,
+    ) -> list[Rol]:
+        """Devuelve los roles vigentes del usuario (no revocados y sin vencer)."""
+        momento = ahora or datetime.now(UTC)
+        stmt = select(AsignacionRol.rol).where(
+            AsignacionRol.usuario_id == usuario_id,
+            AsignacionRol.revocada_en.is_(None),
+            or_(
+                AsignacionRol.vence_en.is_(None),
+                AsignacionRol.vence_en > momento,
+            ),
+        )
+        result = await self.session.execute(stmt)
+        return [Rol(r) for r in result.scalars().all()]
 
 
 class IntentoAccesoRepository(BaseRepository[IntentoAcceso]):
-    async def contar_fallos_recientes(self, email: str, ip: str, ventana_segundos: int) -> int:
-        # Contar fallos recientes posteriores al último éxito o en la ventana temporal
-        # Según diseño: contar fallos de (email, ip) en 60 s, posteriores al último éxito.
-        # Primero buscamos el último éxito:
-        stmt_exito = (
-            select(IntentoAcceso.cuando)
+    async def get_fallos_recientes(
+        self,
+        email: str,
+        ip: str,
+        ventana_segundos: int = 60,
+        limite: int = 5,
+        ahora: datetime | None = None,
+    ) -> list[IntentoAcceso]:
+        """Obtiene los intentos fallidos dentro de la ventana y posteriores al último éxito.
+
+        Se ordenan del más nuevo al más viejo con LIMIT 5 (diseño RN-08): si hay 5, el quinto
+        elemento es el que debe salir de la ventana para volver a habilitar el login.
+        """
+        momento = ahora or datetime.now(UTC)
+        desde = momento - timedelta(seconds=ventana_segundos)
+
+        ultimo_exito_subq = (
+            select(func.max(IntentoAcceso.cuando))
             .where(
                 IntentoAcceso.email == email,
                 IntentoAcceso.ip == ip,
                 IntentoAcceso.exito.is_(True),
             )
-            .order_by(IntentoAcceso.cuando.desc())
-            .limit(1)
+            .scalar_subquery()
         )
-        res_exito = await self.session.execute(stmt_exito)
-        ultimo_exito = res_exito.scalars().first()
 
-        stmt_fallos = select(IntentoAcceso).where(
-            IntentoAcceso.email == email,
-            IntentoAcceso.ip == ip,
-            IntentoAcceso.exito.is_(False),
-        )
-        if ultimo_exito:
-            stmt_fallos = stmt_fallos.where(IntentoAcceso.cuando > ultimo_exito)
-
-        result = await self.session.execute(stmt_fallos)
-        fallos = result.scalars().all()
-
-        # Filtrar también por ventana de tiempo (ej. últimos 60 segundos)
-        ahora_dt = datetime.now(fallos[0].cuando.tzinfo) if fallos and fallos[0].cuando.tzinfo else datetime.utcnow()
-        # Contamos cuántos caen en la ventana
-        # O simplemente traer del más nuevo al más viejo para calcular Retry-After
-        return len(fallos)
-
-    async def get_quinto_fallo(self, email: str, ip: str) -> IntentoAcceso | None:
-        stmt_exito = (
-            select(IntentoAcceso.cuando)
-            .where(
-                IntentoAcceso.email == email,
-                IntentoAcceso.ip == ip,
-                IntentoAcceso.exito.is_(True),
-            )
-            .order_by(IntentoAcceso.cuando.desc())
-            .limit(1)
-        )
-        res_exito = await self.session.execute(stmt_exito)
-        ultimo_exito = res_exito.scalars().first()
-
-        stmt_fallos = (
+        stmt = (
             select(IntentoAcceso)
             .where(
                 IntentoAcceso.email == email,
                 IntentoAcceso.ip == ip,
                 IntentoAcceso.exito.is_(False),
+                IntentoAcceso.cuando >= desde,
+                IntentoAcceso.cuando <= momento,
+                or_(
+                    ultimo_exito_subq.is_(None),
+                    IntentoAcceso.cuando > ultimo_exito_subq,
+                ),
+            )
+            .order_by(IntentoAcceso.cuando.desc())
+            .limit(limite)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def contar_fallos_recientes(
+        self,
+        email: str,
+        ip: str,
+        ventana_segundos: int = 60,
+        ahora: datetime | None = None,
+    ) -> int:
+        """Cuenta los intentos fallidos vigentes en la ventana posteriores al último éxito."""
+        momento = ahora or datetime.now(UTC)
+        desde = momento - timedelta(seconds=ventana_segundos)
+
+        ultimo_exito_subq = (
+            select(func.max(IntentoAcceso.cuando))
+            .where(
+                IntentoAcceso.email == email,
+                IntentoAcceso.ip == ip,
+                IntentoAcceso.exito.is_(True),
+            )
+            .scalar_subquery()
+        )
+
+        stmt = (
+            select(func.count())
+            .select_from(IntentoAcceso)
+            .where(
+                IntentoAcceso.email == email,
+                IntentoAcceso.ip == ip,
+                IntentoAcceso.exito.is_(False),
+                IntentoAcceso.cuando >= desde,
+                IntentoAcceso.cuando <= momento,
+                or_(
+                    ultimo_exito_subq.is_(None),
+                    IntentoAcceso.cuando > ultimo_exito_subq,
+                ),
             )
         )
-        if ultimo_exito:
-            stmt_fallos = stmt_fallos.where(IntentoAcceso.cuando > ultimo_exito)
+        result = await self.session.execute(stmt)
+        return int(result.scalar_one())
 
-        stmt_fallos = stmt_fallos.order_by(IntentoAcceso.cuando.desc()).limit(5)
-        result = await self.session.execute(stmt_fallos)
-        fallos = result.scalars().all()
+    async def get_quinto_fallo(
+        self,
+        email: str,
+        ip: str,
+        ventana_segundos: int = 60,
+        ahora: datetime | None = None,
+    ) -> IntentoAcceso | None:
+        """Devuelve el quinto intento fallido más reciente dentro de la ventana vigente."""
+        fallos = await self.get_fallos_recientes(
+            email=email,
+            ip=ip,
+            ventana_segundos=ventana_segundos,
+            limite=5,
+            ahora=ahora,
+        )
         if len(fallos) >= 5:
-            return fallos[4]  # el quinto más viejo de los últimos 5
+            return fallos[4]
         return None
 
 
 class EventoSeguridadRepository(BaseRepository[EventoSeguridad]):
     pass
-

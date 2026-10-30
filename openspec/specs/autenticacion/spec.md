@@ -1,7 +1,7 @@
 # autenticacion Specification
 
 ## Purpose
-TBD - created by archiving change ej4-autenticacion. Update Purpose after archive.
+Especifica la autenticación de usuarios del taller mecánico: hash de contraseñas con bcrypt sin bloquear el bucle de eventos y con validación de límite de 72 bytes UTF-8, auto-registro atómico de clientes en un único Unit of Work (RN-02), control de intentos de login por ventana temporal con `Retry-After` (RN-08), login indistinguible en mensaje y tiempo ante correos inexistentes mediante hash ficticio (RN-09), y manejo de sesión mediante JWT exclusivamente en la cookie `access_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age`).
 
 ## Requirements
 

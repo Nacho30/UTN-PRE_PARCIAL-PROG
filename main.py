@@ -56,8 +56,12 @@ app = FastAPI(
 
 @app.exception_handler(ErrorDominio)
 async def error_dominio_handler(request: Request, exc: ErrorDominio) -> JSONResponse:
-    """Traduce errores de negocio a JSON con su código correspondiente."""
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    """Traduce errores de negocio a JSON con su código y cabeceras correspondientes."""
+    return JSONResponse(
+        {"detail": exc.detail},
+        status_code=exc.status_code,
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(IntegrityError)

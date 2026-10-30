@@ -1,0 +1,231 @@
+### Casos de prueba · Autenticación y Contratos (C-01 a C-05)
+### Ejecutar previamente: python seed.py
+
+@baseUrl = http://localhost:8000
+
+# ==============================================================================
+# C-03: Login, cookie HttpOnly/SameSite=Lax/Max-Age, cuerpo sin token, /auth/yo
+# ==============================================================================
+
+### C-03a: Login correcto como administrador
+# Esperado: 200 OK
+# Cabecera Set-Cookie: access_token=...; HttpOnly; Max-Age=1800; Path=/; SameSite=lax
+# Cuerpo (sin el token):
+# {
+#   "mensaje": "Sesión iniciada",
+#   "debe_cambiar_password": false,
+#   "expira_en_segundos": 1800
+# }
+# @name loginAdmin
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin1234!"
+}
+
+### C-03b: Consultar /auth/yo con la cookie de la sesión iniciada
+# Esperado: 200 OK con el usuario, sus roles vigentes en la base y los roles del token (sin password_hash)
+# @no-cookie-jar
+GET {{baseUrl}}/auth/yo
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-03c: Consultar /auth/yo sin cookie
+# Esperado: 401 Unauthorized con {"detail": "No autenticado"}
+# @no-cookie-jar
+GET {{baseUrl}}/auth/yo
+
+### C-03d: Consultar /auth/yo con cabecera Authorization: Bearer y sin cookie
+# Esperado: 401 Unauthorized con {"detail": "No autenticado"} (la cabecera Authorization no se lee)
+# @no-cookie-jar
+GET {{baseUrl}}/auth/yo
+Authorization: Bearer token_ignorado_por_diseno
+
+
+# ==============================================================================
+# C-01: Parámetro de ruta no entero, con sesión activa
+# ==============================================================================
+
+### C-01a: Detalle de orden con id no entero en la ruta (con sesión)
+# Esperado: 422 Unprocessable Entity (validado en el contrato de ruta sin ejecutar el servicio)
+# @no-cookie-jar
+GET {{baseUrl}}/ordenes/no-es-entero
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-01b: Detalle de cliente con id fuera de rango (<= 0, con sesión)
+# Esperado: 422 Unprocessable Entity
+# @no-cookie-jar
+GET {{baseUrl}}/clientes/0
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+
+# ==============================================================================
+# C-02: Auto-registro atómico (RN-02); correo y documento repetidos; >72 bytes
+# ==============================================================================
+
+### C-02a: Auto-registro válido (crea usuario, rol CLIENTE y ficha de cliente en un solo UoW)
+# Esperado: 201 Created con id, email="sofia@example.com", roles=["CLIENTE"], activo=true
+# @no-cookie-jar
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "email": "sofia@example.com",
+  "nombre": "Sofía Gómez",
+  "password": "Sofia1234!",
+  "documento": "35111222",
+  "telefono": "1155556666"
+}
+
+### C-02b: Auto-registro con correo ya registrado (RN-01, RN-18)
+# Esperado: 409 Conflict con {"detail": "El correo ya está registrado"}
+# @no-cookie-jar
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "email": "sofia@example.com",
+  "nombre": "Otra Sofía",
+  "password": "Sofia1234!",
+  "documento": "39888777",
+  "telefono": "1177778888"
+}
+
+### C-02c: Auto-registro con el documento de un cliente ya existente en el taller (Jorge: 28999888)
+# Esperado: 409 Conflict con {"detail": "Ya existe un cliente con ese documento"}
+# Transacción revertida (RN-02): no queda creado el usuario "impostor@example.com", ni su rol,
+# ni se apropia de la ficha de cliente de Jorge.
+# @no-cookie-jar
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "email": "impostor@example.com",
+  "nombre": "Impostor Pérez",
+  "password": "Impostor1234!",
+  "documento": "28999888",
+  "telefono": "1199990000"
+}
+
+### C-02d: Contraseña que supera los 72 bytes en UTF-8 (40 «ñ» = 80 bytes)
+# Esperado: 422 Unprocessable Entity (nunca 500)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "email": "clavelarga@example.com",
+  "nombre": "Clave Larga",
+  "password": "ññññññññññññññññññññññññññññññññññññññññ",
+  "documento": "41222333",
+  "telefono": "1133334444"
+}
+
+
+# ==============================================================================
+# C-04: Login indistinguible (RN-09): correo existente con clave mala vs correo inexistente
+# ==============================================================================
+
+### C-04a: Correo existente (cliente@example.com) con contraseña incorrecta
+# Esperado: 401 Unauthorized con {"detail": "Correo o contraseña incorrectos"} (~300 ms)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "cliente@example.com",
+  "password": "ClaveIncorrecta1!"
+}
+
+### C-04b: Correo inexistente con cualquier contraseña
+# Esperado: 401 Unauthorized con el MISMO cuerpo {"detail": "Correo o contraseña incorrectos"}
+# y tiempo equivalente (~300 ms, verifica contra app.state.hash_ficticio)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "noexiste_en_la_base@example.com",
+  "password": "ClaveIncorrecta1!"
+}
+
+
+# ==============================================================================
+# C-05: Seis intentos fallidos seguidos en 60 segundos (RN-08 y Ejercicio 7)
+# ==============================================================================
+
+### C-05 (1/6): Primer intento fallido para recepcion@example.com
+# Esperado: 401 Unauthorized (queda anotado en intento_acceso con exito=false)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-05 (2/6): Segundo intento fallido
+# Esperado: 401 Unauthorized
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-05 (3/6): Tercer intento fallido
+# Esperado: 401 Unauthorized
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-05 (4/6): Cuarto intento fallido
+# Esperado: 401 Unauthorized
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-05 (5/6): Quinto intento fallido
+# Esperado: 401 Unauthorized (5 filas con exito=false en intento_acceso)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-05 (6/6): Sexto intento seguido dentro de los 60 segundos
+# Esperado: 429 Too Many Requests en pocos milisegundos (sin ejecutar bcrypt),
+# con cabecera Retry-After (segundos restantes hasta que salga el 5to fallo de la ventana)
+# y sin agregar una sexta fila en intento_acceso.
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "recepcion@example.com",
+  "password": "MalaPassword1!"
+}
+
+### C-03e: Cierre de sesión (logout)
+# Esperado: 200 OK y borra la cookie access_token
+# @no-cookie-jar
+POST {{baseUrl}}/auth/logout
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}

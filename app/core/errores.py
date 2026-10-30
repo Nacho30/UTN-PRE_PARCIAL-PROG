@@ -13,11 +13,17 @@ class ErrorDominio(Exception):
 
     status_code: int = 400
 
-    def __init__(self, detail: str, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        detail: str,
+        status_code: int | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(detail)
         self.detail = detail
         if status_code is not None:
             self.status_code = status_code
+        self.headers = headers
 
     def __str__(self) -> str:
         return self.detail
@@ -62,12 +68,31 @@ class ErrorPermiso(ErrorDominio):
         super().__init__(detail, status_code=403)
 
 
+class ErrorDemasiadosIntentos(ErrorDominio):
+    status_code = 429
+
+    def __init__(
+        self,
+        retry_after: int,
+        detail: str = "Demasiados intentos fallidos. Intente más tarde.",
+    ) -> None:
+        super().__init__(
+            detail,
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+        self.retry_after = retry_after
+
+
 # --- Traducción de IntegrityError (RN-18 y design.md) ------------------------
 
 RESTRICCIONES_A_MENSAJES: dict[str, str] = {
-    "uq_usuario_email": "Ya existe un usuario con ese correo",
+    "uq_usuario_email": "El correo ya está registrado",
+    "usuario.email": "El correo ya está registrado",
     "uq_cliente_documento": "Ya existe un cliente con ese documento",
+    "cliente.documento": "Ya existe un cliente con ese documento",
     "uq_cliente_usuario_id": "El usuario ya tiene una ficha de cliente",
+    "cliente.usuario_id": "El usuario ya tiene una ficha de cliente",
     "ux_vehiculo_patente_vigente": "Ya existe un vehículo vigente con esa patente",
     "ux_repuesto_codigo_vigente": "Ya existe un repuesto vigente con ese código",
     "ux_asignacion_rol_abierta": "El usuario ya tiene ese rol asignado",

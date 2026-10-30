@@ -12,7 +12,7 @@ import re
 from typing import Annotated, Any
 
 from fastapi import Path
-from pydantic import AfterValidator, ConfigDict
+from pydantic import AfterValidator, ConfigDict, EmailStr
 from sqlalchemy import Column, DateTime, Numeric, func
 from sqlmodel import Field, SQLModel
 
@@ -110,3 +110,13 @@ def normalizar_codigo(codigo: str) -> str:
 def normalizar_email(email: str) -> str:
     """Minúsculas sin espacios alrededor (D-06)."""
     return email.strip().lower()
+
+
+EmailNormalizado = Annotated[
+    EmailStr,
+    AfterValidator(normalizar_email),
+    Field(max_length=254),
+]
+TextoCorto = texto(120)
+Documento = texto(20)
+Telefono = texto(30)
