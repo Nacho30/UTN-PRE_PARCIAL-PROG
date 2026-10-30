@@ -72,8 +72,8 @@ quedan como estaban).
 
 ## Límites
 
-- La captura de pantalla (PNG) de C-14 que pide el formato de entrega no se generó: hay que
-  sacarla en la máquina de entrega. La salida textual está en `docs/evidencias/`.
+- La captura de C-14 se incorporó posteriormente en `docs/evidencias/c14_solo_agregado.png`;
+  también se conserva la salida textual.
 - No se validó concurrencia (capítulo 7, fuera del TP): dos terminaciones simultáneas
   siguen pudiendo producir una actualización perdida; el `UPDATE` condicionado de
   `StockRepository.mover` impide igual el stock negativo.
