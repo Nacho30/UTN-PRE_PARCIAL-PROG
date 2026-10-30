@@ -21,10 +21,9 @@ async def login(
     request: Request,
     response: Response,
     data: LoginIn,
-    session_factory=Depends(lambda: request.app.state.session_factory),
 ):
     return await ServiceAuth.login(
-        session_factory=session_factory,
+        session_factory=request.app.state.session_factory,
         request=request,
         response=response,
         data=data,
