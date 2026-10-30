@@ -87,13 +87,58 @@ repositorios ya correctos y completando UoW inyectados, stock centralizado y ato
 Documento real obligatorio y teléfono opcional como el contrato existente de clientes;
 personal conserva su propio contrato. Evidencia en `docs/validacion-ej5-ej6.md`.
 
-## 2026-10-30 · Ejercicios 7 y 8
+## 2026-10-30 · Ejercicios 7 y 8 · Integridad, lecturas sin N+1 y asincronía
 
-> Haceme por favor los puntos 7 y 8 de este trabajo práctico y subilos a este repositorio.
-> Los commits hacelos con mi usuario.
+> Implementá los Ejercicios 7 (Integridad: sólo agregado e intento de acceso) y 8 (Lecturas
+> sin N+1 y asincronía) del TP siguiendo SDD con OpenSpec y TDD estricto.
+>
+> **Antes de escribir código:** leé `AGENTS.md`, la consigna, `openspec/discovery/`
+> (RN-08, RN-13, RN-15, casos C-05, C-11, C-12, C-14 y C-15), `openspec/foundations/` y los
+> changes `ej7-integridad` y `ej8-lecturas-asincronia`. Revisá qué ya está hecho: el
+> disparador viene del ejercicio 2, `AccesoUnitOfWork` del 6 y la corrección de RN-08 del
+> commit `7dcb823`. No reescribas lo que funciona: extendelo.
+>
+> **Reglas:** respetá las capas Router → Service → UoW → Repository → Model; ningún
+> repositorio confirma; el esquema sólo cambia con Alembic; nada de secretos en el código.
+> Las pruebas corren contra PostgreSQL 16 real en la base desechable `parcial_*` (puerto
+> 55432), con savepoints. Primero la prueba en rojo, después el código.
+>
+> **Ejercicio 7:**
+> - Probá que el disparador de `0002_solo_agregado` rechaza `UPDATE` y `DELETE` en
+>   `historial_estado_orden`, `movimiento_stock` e `historial_precio_repuesto`, que permite
+>   `INSERT`, y que una orden con estado fuera del catálogo la rechaza la clave foránea.
+> - El límite de intentos (RN-08) se decide con **una** consulta: fallos del mismo correo e
+>   IP en los últimos 60 s y posteriores al último éxito, con `LIMIT 5`. Al quinto, 429 con
+>   `Retry-After` calculado desde el fallo más viejo de la ventana, sin calcular ningún hash.
+> - El intento se anota en la sesión y transacción propias de `AccesoUnitOfWork`, que
+>   confirma siempre. Un comentario en el código declara la razón y el costo.
+> - Corré `test/solo_agregado.sql` en `psql` y guardá la salida como evidencia de C-14.
+>
+> **Ejercicio 8:**
+> - `get_detalle` resuelve la orden en un número fijo de consultas: orden + vehículo +
+>   cliente con `joinedload` en un JOIN; ítems → repuesto e historial con `selectinload`.
+>   Probalo contando sentencias con un listener de SQLAlchemy: 2 y 4 ítems, mismo total.
+> - Crear y terminar una orden no leen repuestos de a uno: traelos en un `IN` o reutilizá la
+>   precarga del detalle.
+> - Verificá que todas las relaciones tengan `lazy="raise_on_sql"` y que todos los handlers
+>   sean `async def`.
+> - Creá `app/modules/ordenes/avisos.py` con `avisar_cliente` (`await asyncio.sleep(0.5)` y
+>   un mensaje en el registro). El router lo agenda con `BackgroundTasks` sólo después de
+>   que el servicio confirmó, pasándole valores sueltos y no objetos del ORM. Probá que no se
+>   agenda con 403, 409 ni con un commit fallido, y que corre después de enviar la respuesta.
+> - Con `SQL_ECHO=true`, cada consulta tiene que salir una sola vez en la consola. Guardá la
+>   salida de `GET /ordenes/{id}` con 2 y 4 ítems como evidencia de C-15.
+>
+> **Para cerrar:** suite completa en verde (si algo fallaba antes de tus cambios, verificalo
+> contra `main` y anotalo, sin tocarlo); `alembic upgrade head` → `downgrade base` →
+> `upgrade head` y `alembic check`; `openspec validate <change> --strict` y
+> `openspec archive <change> --yes`; actualizá `tasks.md`, roadmap, reglas, README,
+> `docs/evidencias/` y un `docs/validacion-ej7-ej8.md` con lo ejecutado y sus límites.
+> Un commit por ejercicio más uno de documentación, con mi autor.
 
-Se trabajó con los changes `ej7-integridad` y `ej8-lecturas-asincronia`, pruebas antes del
-código contra PostgreSQL 16 real. En E7, sobre la corrección de RN-08 del commit `7dcb823`,
-el 429 quedó en una sola consulta y se agregaron las pruebas del disparador y del límite. En
-E8, detalle en cuatro consultas fijas, alta y terminación sin lecturas por ítem, aviso en
-`BackgroundTasks` y `SQL_ECHO` sin duplicados. Evidencia en `docs/validacion-ej7-ej8.md`.
+**Resultado.** Sobre la corrección de RN-08 de `7dcb823`, el 429 quedó en una sola consulta
+(antes eran dos). El detalle de una orden pasó de 6 a 4 consultas fijas; el alta y la
+terminación ya no leen repuestos por ítem; el aviso corre en segundo plano sólo tras
+confirmar; `SQL_ECHO` dejó de duplicar las consultas. 32 pruebas nuevas en
+`test_integridad.py` y `test_lecturas.py`. Evidencia en `docs/validacion-ej7-ej8.md` y
+`docs/evidencias/`.
