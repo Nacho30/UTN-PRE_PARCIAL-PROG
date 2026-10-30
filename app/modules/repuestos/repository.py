@@ -1,6 +1,10 @@
 """Repositorios del módulo de repuestos."""
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
+
+from app.core.errores import ErrorConflicto
 
 from app.core.repository import BaseRepository, SoftDeleteRepository
 from app.modules.repuestos.models import HistorialPrecio, MovimientoStock, Repuesto
@@ -61,3 +65,46 @@ class HistorialPrecioRepository(BaseRepository[HistorialPrecio]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+
+class StockRepository:
+    """Único punto de escritura de stock; el UoW confirma stock y movimiento juntos."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def mover(
+        self,
+        repuesto: Repuesto,
+        cantidad: int,
+        motivo: str,
+        usuario_id: int,
+        orden_id: int | None = None,
+    ) -> MovimientoStock:
+        if cantidad == 0:
+            raise ErrorConflicto("El movimiento de stock no puede ser cero")
+        nuevo_stock = (await self.session.execute(
+            update(Repuesto)
+            .where(
+                Repuesto.id == repuesto.id,
+                Repuesto.borrado_en.is_(None),
+                Repuesto.stock + cantidad >= 0,
+            )
+            .values(stock=Repuesto.stock + cantidad)
+            .returning(Repuesto.stock)
+            .execution_options(synchronize_session=False)
+        )).scalar_one_or_none()
+        if nuevo_stock is None:
+            raise ErrorConflicto(
+                f"Stock insuficiente o repuesto no vigente: {repuesto.codigo}")
+        # El UPDATE ya persistió este atributo; evitar otro UPDATE del ORM al hacer flush.
+        set_committed_value(repuesto, "stock", nuevo_stock)
+        movimiento = MovimientoStock(
+            repuesto_id=repuesto.id,
+            orden_id=orden_id,
+            usuario_id=usuario_id,
+            cantidad=cantidad,
+            motivo=motivo,
+        )
+        await MovimientoStockRepository(self.session, MovimientoStock).add(movimiento)
+        return movimiento

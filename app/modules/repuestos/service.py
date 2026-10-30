@@ -73,7 +73,7 @@ class RepuestosService:
             await uow.repuestos.add(repuesto)
 
             if payload.stock_inicial > 0:
-                await uow.registrar_movimiento(
+                await uow.stock.mover(
                     repuesto,
                     cantidad=payload.stock_inicial,
                     motivo="Stock inicial",
@@ -154,7 +154,7 @@ class RepuestosService:
             if not repuesto:
                 raise ErrorNoEncontrado(f"No existe el repuesto con id {repuesto_id}")
 
-            await uow.registrar_movimiento(
+            await uow.stock.mover(
                 repuesto,
                 cantidad=payload.cantidad,
                 motivo=payload.motivo,

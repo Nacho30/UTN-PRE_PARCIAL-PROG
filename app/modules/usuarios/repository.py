@@ -1,6 +1,7 @@
 """Repositorios del módulo de usuarios, roles, intentos de acceso y eventos."""
 
 from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import func, or_, select
 
 from app.core.repository import BaseRepository
@@ -13,6 +14,14 @@ from app.modules.usuarios.models import (
 )
 
 
+def _vigente(momento: datetime):
+    return (
+        AsignacionRol.revocada_en.is_(None),
+        AsignacionRol.desde <= momento,
+        or_(AsignacionRol.vence_en.is_(None), AsignacionRol.vence_en > momento),
+    )
+
+
 class UsuarioRepository(BaseRepository[Usuario]):
     async def get_by_email(self, email: str) -> Usuario | None:
         stmt = select(Usuario).where(Usuario.email == email)
@@ -21,23 +30,59 @@ class UsuarioRepository(BaseRepository[Usuario]):
 
 
 class AsignacionRolRepository(BaseRepository[AsignacionRol]):
+    async def get_vigentes_de_usuario(
+        self, usuario_id: int, momento: datetime
+    ) -> list[str]:
+        stmt = (
+            select(AsignacionRol.rol)
+            .where(
+                AsignacionRol.usuario_id == usuario_id,
+                *_vigente(momento),
+            )
+            .order_by(AsignacionRol.rol)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get_roles_vigentes(
         self,
         usuario_id: int,
         ahora: datetime | None = None,
     ) -> list[Rol]:
-        """Devuelve los roles vigentes del usuario (no revocados y sin vencer)."""
+        """Devuelve los roles vigentes del usuario (no revocados, iniciados y sin vencer)."""
         momento = ahora or datetime.now(UTC)
-        stmt = select(AsignacionRol.rol).where(
-            AsignacionRol.usuario_id == usuario_id,
-            AsignacionRol.revocada_en.is_(None),
-            or_(
-                AsignacionRol.vence_en.is_(None),
-                AsignacionRol.vence_en > momento,
-            ),
+        roles = await self.get_vigentes_de_usuario(usuario_id, momento)
+        return [Rol(r) for r in roles]
+
+    async def get_historial_de_usuario(self, usuario_id: int) -> list[AsignacionRol]:
+        stmt = (
+            select(AsignacionRol)
+            .where(AsignacionRol.usuario_id == usuario_id)
+            .order_by(AsignacionRol.id)
         )
-        result = await self.session.execute(stmt)
-        return [Rol(r) for r in result.scalars().all()]
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def get_abierta(self, usuario_id: int, rol: str) -> AsignacionRol | None:
+        stmt = select(AsignacionRol).where(
+            AsignacionRol.usuario_id == usuario_id,
+            AsignacionRol.rol == rol,
+            AsignacionRol.revocada_en.is_(None),
+        )
+        return (await self.session.execute(stmt)).scalars().first()
+
+    async def contar_administradores(self, momento: datetime) -> int:
+        stmt = (
+            select(func.count(func.distinct(Usuario.id)))
+            .join(
+                AsignacionRol,
+                AsignacionRol.usuario_id == Usuario.id,
+            )
+            .where(
+                Usuario.activo.is_(True),
+                AsignacionRol.rol == "ADMIN",
+                *_vigente(momento),
+            )
+        )
+        return (await self.session.execute(stmt)).scalar_one()
 
 
 class IntentoAccesoRepository(BaseRepository[IntentoAcceso]):
@@ -146,4 +191,11 @@ class IntentoAccesoRepository(BaseRepository[IntentoAcceso]):
 
 
 class EventoSeguridadRepository(BaseRepository[EventoSeguridad]):
-    pass
+    async def get_paginado(self, page: int, size: int) -> list[EventoSeguridad]:
+        stmt = (
+            select(EventoSeguridad)
+            .order_by(EventoSeguridad.cuando.desc(), EventoSeguridad.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())

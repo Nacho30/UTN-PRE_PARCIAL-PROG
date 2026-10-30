@@ -3,7 +3,7 @@
 Plan de trabajo del TP por *changes* de OpenSpec. Cada fila es un ejercicio de la consigna con
 su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 
-**Avance: 48 / 100 puntos** (ejercicios 1, 2, 3 y 4) + la parte de base y `AccesoUnitOfWork` del ejercicio 7.
+**Estado documental actualizado:** ejercicios 1 a 6 implementados (más el disparador y `AccesoUnitOfWork` del ejercicio 7); los ejercicios 4, 5 y 6 están verificados y archivados. Las verificaciones ejecutadas y sus límites están en `docs/validacion-ej5-ej6.md`.
 
 ## Estado
 
@@ -11,10 +11,10 @@ su *change* en [`changes/`](changes). Se actualiza al cerrar cada uno.
 |---|---|---|---|---|---|
 | 1 | [`ej1-proyecto-config`](changes/ej1-proyecto-config) | Proyecto, configuración y ciclo de vida | 8 | — | ✅ Implementado · falta verificar en la máquina |
 | 2 | [`ej2-modelos-migraciones`](changes/ej2-modelos-migraciones) | Modelos, relaciones y migraciones | 14 | ej1 | ✅ Implementado · falta `alembic check` y ciclo de migraciones |
-| 3 | [`ej6-repositorios-uow`](changes/ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ⏳ Change listo, sin implementar |
+| 3 | [`ej6-repositorios-uow`](changes/archive/2026-10-30-ej6-repositorios-uow) | Repositorios y Unit of Work | 20 | ej2 | ✅ Implementado y archivado; atomicidad HTTP + PostgreSQL |
 | 4 | [`ej3-contratos-crud`](changes/ej3-contratos-crud) | Contratos y CRUD | 10 | ej2, ej6 | ✅ Implementado y verificado |
-| 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Implementado y verificado |
-| 6 | [`ej5-autorizacion`](changes/ej5-autorizacion) | Autorización | 14 | ej4 | ⏳ Change listo, sin implementar |
+| 5 | [`ej4-autenticacion`](changes/archive/2026-10-29-ej4-autenticacion) | Autenticación | 16 | ej3, ej6 | ✅ Implementado, archivado y verificado |
+| 6 | [`ej5-autorizacion`](changes/archive/2026-10-30-ej5-autorizacion) | Autorización | 14 | ej4 | ✅ Implementado y archivado; pruebas HTTP + PostgreSQL |
 | 7 | [`ej7-integridad`](changes/ej7-integridad) | Integridad: sólo agregado e intento de acceso | 10 | ej2, ej4 | ✅ Disparador y `AccesoUnitOfWork` hechos · falta captura de `psql` |
 | 8 | [`ej8-lecturas-asincronia`](changes/ej8-lecturas-asincronia) | Lecturas sin N+1 y asincronía | 8 | ej3, ej6 | ⏳ Change listo, sin implementar |
 
@@ -40,8 +40,7 @@ flowchart LR
 - **ej7 después de ej4:** el intento de acceso se anota desde el login.
 - **ej8 al final:** optimiza lecturas que ya existen.
 
-Mientras no estén ej4 y ej5, los endpoints de ej3 se prueban desde `/docs` sin sesión; los casos
-`.http` que necesitan login se habilitan con ej4.
+Los endpoints de negocio ya exigen sesión y permisos de E5. Los casos `.http` usan los usuarios del seed.
 
 ## Hitos
 

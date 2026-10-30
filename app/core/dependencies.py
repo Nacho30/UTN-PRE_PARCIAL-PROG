@@ -1,85 +1,86 @@
-"""Dependencias de autenticación y autorización.
+"""Identidad desde cookie y permisos vigentes consultados en cada petición."""
 
-En el ejercicio 4 se implementan la lectura exclusiva del token desde la cookie `access_token`
-(nunca desde `Authorization: Bearer`) y `get_usuario_actual` con todas las causas de 401,
-incluyendo la comparación sin truncar en microsegundos enteros de `iat` contra
-`password_cambiada_en` (RN-07).
-"""
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 
-from datetime import UTC
-from typing import Any
-
-from fastapi import Depends, Request
 import jwt
+from fastapi import Cookie, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import lectura_corta
-from app.core.errores import ErrorNoAutenticado
+from app.core.database import get_session, lectura_corta
+from app.core.errores import ErrorNoAutenticado, ErrorPermiso
 from app.core.security import decodificar_token
-from app.modules.usuarios.models import Usuario
-from app.modules.usuarios.unit_of_work import UsuarioUnitOfWork, get_usuario_uow
+from app.core.tipos import ahora
+from app.modules.usuarios.models import AsignacionRol, Usuario
+from app.modules.usuarios.repository import AsignacionRolRepository, UsuarioRepository
 
 
-async def obtener_token_cookie(request: Request) -> str:
-    """Lee el JWT exclusivamente desde la cookie `access_token`.
-
-    La cabecera `Authorization` no se lee nunca (RN-09 / requisito de cookie HttpOnly).
-    """
-    token = request.cookies.get("access_token")
-    if not token:
-        raise ErrorNoAutenticado("No autenticado")
-    return token
+@dataclass
+class UsuarioActual:
+    usuario: Usuario
+    roles: list[str]
+    roles_token: list[str]
 
 
-async def obtener_payload_token(
-    token: str = Depends(obtener_token_cookie),
-) -> dict[str, Any]:
-    """Decodifica y verifica la firma y vigencia del JWT."""
-    try:
-        return decodificar_token(token)
-    except jwt.PyJWTError as exc:
-        raise ErrorNoAutenticado("Token inválido o vencido") from exc
-    except Exception as exc:
-        raise ErrorNoAutenticado("Token inválido o vencido") from exc
+def _microsegundos(momento: datetime) -> int:
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=UTC)
+    delta = momento.astimezone(UTC) - datetime(1970, 1, 1, tzinfo=UTC)
+    return (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
+
+
+async def get_roles_vigentes(session: AsyncSession, usuario_id: int) -> list[str]:
+    return await AsignacionRolRepository(
+        session, AsignacionRol
+    ).get_vigentes_de_usuario(usuario_id, ahora())
 
 
 async def get_usuario_actual(
-    request: Request,
-    payload: dict[str, Any] = Depends(obtener_payload_token),
-    uow: UsuarioUnitOfWork = Depends(get_usuario_uow),
-) -> Usuario:
-    """Obtiene el usuario autenticado y verifica que la sesión siga siendo válida (401).
+    access_token: str | None = Cookie(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> UsuarioActual:
+    if not access_token:
+        raise ErrorNoAutenticado()
+    try:
+        payload = decodificar_token(access_token)
+        iat = Decimal(str(payload["iat"]))
+        if not iat.is_finite():
+            raise ValueError("iat inválido")
+        iat_us = int(iat * 1_000_000)
+    except (
+        jwt.InvalidTokenError,
+        ValueError,
+        TypeError,
+        InvalidOperation,
+        OverflowError,
+    ):
+        raise ErrorNoAutenticado("Token inválido o expirado") from None
+    async with lectura_corta(session):
+        usuario = await UsuarioRepository(session, Usuario).get_by_email(payload["sub"])
+        if usuario is None or not usuario.activo:
+            raise ErrorNoAutenticado()
+        if usuario.password_cambiada_en and iat_us < _microsegundos(
+            usuario.password_cambiada_en
+        ):
+            raise ErrorNoAutenticado("La sesión es anterior al cambio de contraseña")
+        roles = await get_roles_vigentes(session, usuario.id)  # type: ignore[arg-type]
+    return UsuarioActual(usuario, roles, payload.get("roles", []))
 
-    Causas de 401:
-    - Sin cookie `access_token` (incluso si envía `Authorization: Bearer`).
-    - Token inválido o vencido (`exp`).
-    - Usuario inexistente o con `activo = False`.
-    - Token emitido antes de `password_cambiada_en` comparado en microsegundos enteros (RN-07).
-    """
-    sub = payload.get("sub")
-    iat = payload.get("iat")
-    if sub is None or iat is None:
-        raise ErrorNoAutenticado("Token inválido o vencido")
 
-    async with lectura_corta(uow.session):
-        sub_str = str(sub)
-        if "@" in sub_str:
-            usuario = await uow.usuarios.get_by_email(sub_str)
-        elif sub_str.isdigit():
-            usuario = await uow.usuarios.get_by_id(int(sub_str))
-        else:
-            usuario = await uow.usuarios.get_by_email(sub_str)
+def requiere_rol(*roles: str):
+    async def comprobar(
+        actual: UsuarioActual = Depends(get_usuario_actual),
+    ) -> UsuarioActual:
+        if not set(actual.roles).intersection(roles):
+            raise ErrorPermiso()
+        return actual
 
-    if usuario is None or not usuario.activo:
-        raise ErrorNoAutenticado("Usuario no encontrado o inactivo")
+    return comprobar
 
-    if usuario.password_cambiada_en is not None:
-        cambiada_en = usuario.password_cambiada_en
-        if cambiada_en.tzinfo is None:
-            cambiada_en = cambiada_en.replace(tzinfo=UTC)
-        iat_us = round(float(iat) * 1_000_000)
-        cambiada_us = round(cambiada_en.timestamp() * 1_000_000)
-        if iat_us < cambiada_us:
-            raise ErrorNoAutenticado("La sesión caducó por cambio de contraseña")
 
-    request.state.token_payload = payload
-    return usuario
+async def exigir_password_al_dia(
+    actual: UsuarioActual = Depends(get_usuario_actual),
+) -> None:
+    if actual.usuario.debe_cambiar_password:
+        raise ErrorPermiso("Debe cambiar la contraseña antes de continuar")

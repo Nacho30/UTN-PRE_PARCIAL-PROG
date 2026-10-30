@@ -10,6 +10,7 @@ from app.modules.repuestos.repository import (
     HistorialPrecioRepository,
     MovimientoStockRepository,
     RepuestoRepository,
+    StockRepository,
 )
 
 
@@ -19,27 +20,7 @@ class RepuestosUnitOfWork(UnitOfWork):
         self.repuestos = RepuestoRepository(session, Repuesto)
         self.movimientos = MovimientoStockRepository(session, MovimientoStock)
         self.precios = HistorialPrecioRepository(session, HistorialPrecio)
-
-    async def registrar_movimiento(
-        self,
-        repuesto: Repuesto,
-        cantidad: int,
-        motivo: str,
-        usuario_id: int,
-        orden_id: int | None = None,
-    ) -> MovimientoStock:
-        """Punto único de escritura de stock con su movimiento (RN-14)."""
-        repuesto.stock += cantidad
-        mov = MovimientoStock(
-            repuesto_id=repuesto.id,  # type: ignore[arg-type]
-            orden_id=orden_id,
-            usuario_id=usuario_id,
-            cantidad=cantidad,
-            motivo=motivo,
-        )
-        await self.movimientos.add(mov)
-        await self.repuestos.update(repuesto)
-        return mov
+        self.stock = StockRepository(session)
 
 
 async def get_repuestos_uow(session: AsyncSession = Depends(get_session)) -> RepuestosUnitOfWork:

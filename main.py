@@ -1,7 +1,7 @@
 """Aplicación, lifespan y los dos grupos de rutas.
 
 Grupo ABIERTO: /health (y /auth). Grupo PROTEGIDO: clientes, repuestos, ordenes
-(en el ejercicio 5 lleva montado, una sola vez, el control del cambio obligatorio
+(con el control montado una sola vez para el cambio obligatorio
 de contraseña. FastAPI suma dependencias y no las resta, sección 5.10).
 """
 
@@ -10,22 +10,26 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from app import modelos  # noqa: F401  registra todos los modelos antes de configurar los mappers
 from app.core.config import get_settings
 from app.core.database import crear_engine, crear_session_factory
+from app.core.dependencies import exigir_password_al_dia
 from app.core.errores import ErrorDominio, traducir_integrity_error
 from app.core.security import hash_password
 from app.modules.clientes.router import router as clientes_router
 from app.modules.health.router import router as health_router
 from app.modules.ordenes.router import router as ordenes_router
 from app.modules.repuestos.router import router as repuestos_router
+from app.modules.usuarios.router import personal_router
 from app.modules.usuarios.router import router as usuarios_router
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("taller")
 
 
@@ -39,7 +43,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Hash ficticio, calculado una sola vez y con el mismo costo que los reales: el login
     # (ejercicio 4) verifica contra él cuando el correo no existe, y así tarda lo mismo.
     app.state.hash_ficticio = await hash_password(secrets.token_urlsafe(32), settings)
-    logger.info("Taller listo (pool=%s, bcrypt=%s)", settings.DB_POOL_SIZE, settings.BCRYPT_ROUNDS)
+    logger.info(
+        "Taller listo (pool=%s, bcrypt=%s)",
+        settings.DB_POOL_SIZE,
+        settings.BCRYPT_ROUNDS,
+    )
     try:
         yield
     finally:
@@ -65,10 +73,14 @@ async def error_dominio_handler(request: Request, exc: ErrorDominio) -> JSONResp
 
 
 @app.exception_handler(IntegrityError)
-async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+async def integrity_error_handler(
+    request: Request, exc: IntegrityError
+) -> JSONResponse:
     """Traduce violaciones de unicidad o restricciones a 409 con mensaje en castellano (RN-18)."""
     mensaje = traducir_integrity_error(exc)
-    logger.warning("IntegrityError en %s %s -> %s", request.method, request.url.path, mensaje)
+    logger.warning(
+        "IntegrityError en %s %s -> %s", request.method, request.url.path, mensaje
+    )
     return JSONResponse({"detail": mensaje}, status_code=status.HTTP_409_CONFLICT)
 
 
@@ -83,7 +95,8 @@ abierto = APIRouter()
 abierto.include_router(health_router)
 abierto.include_router(usuarios_router)
 
-protegido = APIRouter()
+protegido = APIRouter(dependencies=[Depends(exigir_password_al_dia)])
+protegido.include_router(personal_router)
 protegido.include_router(clientes_router)
 protegido.include_router(repuestos_router)
 protegido.include_router(ordenes_router)

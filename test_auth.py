@@ -1,5 +1,10 @@
+from uuid import uuid4
+
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from pydantic import TypeAdapter, ValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.tipos import (
     Documento,
@@ -15,6 +20,43 @@ from app.modules.usuarios.schemas import (
     UsuarioOut,
     YoOut,
 )
+from main import app
+
+
+@pytest_asyncio.fixture
+async def auth_client():
+    """Cada prueba usa savepoints; los commits del servicio no persisten sus datos."""
+    async with app.router.lifespan_context(app):
+        original_factory = app.state.session_factory
+        async with app.state.engine.connect() as connection:
+            transaction = await connection.begin()
+            app.state.session_factory = async_sessionmaker(
+                connection,
+                expire_on_commit=False,
+                autoflush=False,
+                join_transaction_mode="create_savepoint",
+            )
+            try:
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                ) as client:
+                    yield client
+            finally:
+                await transaction.rollback()
+                app.state.session_factory = original_factory
+
+
+@pytest.fixture
+def registro_data():
+    # Correo corto y único: no colisiona con datos de otra ejecución.
+    return {
+        "email": f"{uuid4().hex[:8]}@test.com",
+        "nombre": "Test User",
+        "password": "Password123",
+        "documento": uuid4().hex[:16],
+        "telefono": "2615551234",
+    }
 
 
 def test_password_bcrypt_72_bytes():
@@ -208,13 +250,15 @@ def test_repositorios_y_uow(tmp_path):
     async def escenario():
         session = session_factory()
         uow = UsuarioUnitOfWork(session)
-        # UsuarioUnitOfWork debe componer usuarios, asignaciones y clientes en la misma sesión
+        # UsuarioUnitOfWork debe componer usuarios, asignaciones, clientes y eventos en la misma sesión
         assert hasattr(uow, "usuarios")
         assert hasattr(uow, "asignaciones")
         assert hasattr(uow, "clientes")
+        assert hasattr(uow, "eventos")
         assert uow.usuarios.session is session
         assert uow.asignaciones.session is session
         assert uow.clientes.session is session
+        assert uow.eventos.session is session
 
         async with uow:
             u = Usuario(email="ana@taller.com", nombre="Ana", password_hash="hash")
@@ -222,11 +266,18 @@ def test_repositorios_y_uow(tmp_path):
             assert u.id is not None
 
             # 1 rol vigente sin vencimiento, 1 vigente con vencimiento futuro, 1 vencido, 1 revocado
-            await uow.asignaciones.add(AsignacionRol(usuario_id=u.id, rol=Rol.CLIENTE))
+            await uow.asignaciones.add(
+                AsignacionRol(
+                    usuario_id=u.id,
+                    rol=Rol.CLIENTE,
+                    desde=ahora - timedelta(minutes=1),
+                )
+            )
             await uow.asignaciones.add(
                 AsignacionRol(
                     usuario_id=u.id,
                     rol=Rol.RECEPCION,
+                    desde=ahora - timedelta(minutes=1),
                     vence_en=ahora + timedelta(days=1),
                 )
             )
@@ -234,6 +285,7 @@ def test_repositorios_y_uow(tmp_path):
                 AsignacionRol(
                     usuario_id=u.id,
                     rol=Rol.MECANICO,
+                    desde=ahora - timedelta(minutes=10),
                     vence_en=ahora - timedelta(seconds=10),
                 )
             )
@@ -241,6 +293,7 @@ def test_repositorios_y_uow(tmp_path):
                 AsignacionRol(
                     usuario_id=u.id,
                     rol=Rol.ADMIN,
+                    desde=ahora - timedelta(minutes=10),
                     revocada_en=ahora - timedelta(minutes=5),
                 )
             )
@@ -347,7 +400,6 @@ def _preparar_app_test(tmp_path, monkeypatch):
     import asyncio
     import anyio.to_thread
     import fastapi.dependencies.utils
-    from main import app
     from app.core.database import get_session
     from app.core.security import _hash_sync
 
@@ -363,7 +415,9 @@ def _preparar_app_test(tmp_path, monkeypatch):
 
     monkeypatch.setattr(asyncio, "to_thread", _immediate_to_thread)
     monkeypatch.setattr(anyio.to_thread, "run_sync", _immediate_run_sync)
-    monkeypatch.setattr(fastapi.dependencies.utils, "run_in_threadpool", _immediate_run_in_threadpool)
+    monkeypatch.setattr(
+        fastapi.dependencies.utils, "run_in_threadpool", _immediate_run_in_threadpool
+    )
 
     session_factory = _crear_db_factory(tmp_path)
     app.state.session_factory = session_factory
@@ -381,12 +435,11 @@ def _preparar_app_test(tmp_path, monkeypatch):
 
 
 def test_endpoints_registro_atomico_y_72_bytes(tmp_path, monkeypatch):
-    from httpx import ASGITransport, AsyncClient
     from sqlalchemy import select
     from app.modules.clientes.models import Cliente
-    from app.modules.usuarios.models import AsignacionRol, Usuario
+    from app.modules.usuarios.models import AsignacionRol, EventoSeguridad, Usuario
 
-    app, session_factory = _preparar_app_test(tmp_path, monkeypatch)
+    app_inst, session_factory = _preparar_app_test(tmp_path, monkeypatch)
 
     async def escenario():
         # Pre-cargamos a Jorge (cliente del taller sin usuario, documento="28999888")
@@ -400,7 +453,9 @@ def test_endpoints_registro_atomico_y_72_bytes(tmp_path, monkeypatch):
             s.add(jorge)
             await s.commit()
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app_inst), base_url="http://test"
+        ) as ac:
             # 1. Contraseña de 40 «ñ» (80 bytes UTF-8) -> 422
             res_72 = await ac.post(
                 "/auth/registro",
@@ -414,7 +469,7 @@ def test_endpoints_registro_atomico_y_72_bytes(tmp_path, monkeypatch):
             )
             assert res_72.status_code == 422
 
-            # 2. Auto-registro válido -> 201 y crea Usuario + AsignacionRol(CLIENTE) + Cliente
+            # 2. Auto-registro válido -> 201 y crea Usuario + AsignacionRol(CLIENTE) + Cliente + EventoSeguridad
             res_ok = await ac.post(
                 "/auth/registro",
                 json={
@@ -459,18 +514,25 @@ def test_endpoints_registro_atomico_y_72_bytes(tmp_path, monkeypatch):
             assert res_dup_doc.status_code == 409
             assert "documento" in res_dup_doc.json()["detail"].lower()
 
-            # Verificar en la base que impostor@taller.com NO quedó creado ni su rol, y Jorge sigue sin usuario
+            # Verificar en la base que impostor@taller.com NO quedó creado ni su rol ni evento, y Jorge sigue sin usuario
             async with session_factory() as s:
                 u_imp = (
-                    await s.execute(select(Usuario).where(Usuario.email == "impostor@taller.com"))
+                    await s.execute(
+                        select(Usuario).where(Usuario.email == "impostor@taller.com")
+                    )
                 ).scalars().first()
                 assert u_imp is None
 
                 roles_all = (await s.execute(select(AsignacionRol))).scalars().all()
                 assert len(roles_all) == 1  # solo el de Laura
 
+                eventos_all = (await s.execute(select(EventoSeguridad))).scalars().all()
+                assert len(eventos_all) == 1  # solo el de Laura
+
                 jorge_db = (
-                    await s.execute(select(Cliente).where(Cliente.documento == "28999888"))
+                    await s.execute(
+                        select(Cliente).where(Cliente.documento == "28999888")
+                    )
                 ).scalars().first()
                 assert jorge_db is not None
                 assert jorge_db.usuario_id is None
@@ -478,19 +540,20 @@ def test_endpoints_registro_atomico_y_72_bytes(tmp_path, monkeypatch):
     try:
         _run(escenario())
     finally:
-        app.dependency_overrides.clear()
+        app_inst.dependency_overrides.clear()
 
 
 def test_endpoints_login_rate_limit_yo_y_logout(tmp_path, monkeypatch):
     from datetime import UTC, datetime, timedelta
-    from httpx import ASGITransport, AsyncClient
     from sqlalchemy import select
-    from app.modules.usuarios.models import AsignacionRol, IntentoAcceso, Rol, Usuario
+    from app.modules.usuarios.models import AsignacionRol, IntentoAcceso, Usuario
 
-    app, session_factory = _preparar_app_test(tmp_path, monkeypatch)
+    app_inst, session_factory = _preparar_app_test(tmp_path, monkeypatch)
 
     async def escenario():
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app_inst), base_url="http://test"
+        ) as ac:
             # Registrar un usuario válido
             res_reg = await ac.post(
                 "/auth/registro",
@@ -598,7 +661,9 @@ def test_endpoints_login_rate_limit_yo_y_logout(tmp_path, monkeypatch):
             async with session_factory() as s:
                 asig = (
                     await s.execute(
-                        select(AsignacionRol).where(AsignacionRol.usuario_id == usuario_id)
+                        select(AsignacionRol).where(
+                            AsignacionRol.usuario_id == usuario_id
+                        )
                     )
                 ).scalars().first()
                 assert asig is not None
@@ -625,7 +690,9 @@ def test_endpoints_login_rate_limit_yo_y_logout(tmp_path, monkeypatch):
                     await s.execute(select(Usuario).where(Usuario.id == usuario_id))
                 ).scalars().first()
                 assert u_db is not None
-                u_db.password_cambiada_en = datetime.now(UTC) + timedelta(milliseconds=10)
+                u_db.password_cambiada_en = datetime.now(UTC) + timedelta(
+                    milliseconds=10
+                )
                 await s.commit()
 
             res_rn07 = await ac.get("/auth/yo")
@@ -634,17 +701,19 @@ def test_endpoints_login_rate_limit_yo_y_logout(tmp_path, monkeypatch):
             # 7. POST /auth/logout -> 200 y borra la cookie
             res_logout = await ac.post("/auth/logout")
             assert res_logout.status_code == 200
-            assert 'access_token=""' in res_logout.headers.get("set-cookie", "") or "max-age=0" in res_logout.headers.get("set-cookie", "").lower()
+            assert (
+                'access_token=""' in res_logout.headers.get("set-cookie", "")
+                or "max-age=0" in res_logout.headers.get("set-cookie", "").lower()
+            )
 
     try:
         _run(escenario())
     finally:
-        app.dependency_overrides.clear()
+        app_inst.dependency_overrides.clear()
 
 
 def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
     import inspect
-    from httpx import ASGITransport, AsyncClient
     from sqlalchemy import select
     import app.modules.usuarios.router as router_mod
     import app.modules.usuarios.service as service_mod
@@ -661,7 +730,7 @@ def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
     assert "select(" not in src_router
     assert "session.add(" not in src_router
 
-    app, session_factory = _preparar_app_test(tmp_path, monkeypatch)
+    app_inst, session_factory = _preparar_app_test(tmp_path, monkeypatch)
 
     # Espía sobre verificar_password para comprobar RN-08 (no hashea en 429) y RN-09 (usa hash_ficticio)
     llamadas_verificar: list[tuple[str, str]] = []
@@ -674,7 +743,9 @@ def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
     monkeypatch.setattr(service_mod, "verificar_password", _spy_verificar)
 
     async def escenario():
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app_inst), base_url="http://test"
+        ) as ac:
             # 1. Login de correo inexistente verifica contra hash_ficticio (RN-09)
             res_fantasma = await ac.post(
                 "/auth/login",
@@ -682,7 +753,7 @@ def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
             )
             assert res_fantasma.status_code == 401
             assert len(llamadas_verificar) == 1
-            assert llamadas_verificar[0][1] == app.state.hash_ficticio
+            assert llamadas_verificar[0][1] == app_inst.state.hash_ficticio
 
             # Completamos 5 fallos para fantasma@taller.com
             for _ in range(4):
@@ -720,7 +791,9 @@ def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
             # Desactivamos al usuario en la base
             async with session_factory() as s:
                 u_db = (
-                    await s.execute(select(Usuario).where(Usuario.email == "inactivo@taller.com"))
+                    await s.execute(
+                        select(Usuario).where(Usuario.email == "inactivo@taller.com")
+                    )
                 ).scalars().first()
                 assert u_db is not None
                 u_db.activo = False
@@ -745,6 +818,4 @@ def test_triangulacion_seguridad_y_capas(tmp_path, monkeypatch):
     try:
         _run(escenario())
     finally:
-        app.dependency_overrides.clear()
-
-
+        app_inst.dependency_overrides.clear()

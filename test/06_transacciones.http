@@ -1,0 +1,62 @@
+@base = http://127.0.0.1:8000
+# Antes del archivo: python seed.py EN UNA BASE DE PRUEBA.
+# Las solicitudes cambian stock y precios de los datos ficticios del seed.
+
+### C-02: registro completo, esperado 201
+POST {{base}}/auth/registro
+Content-Type: application/json
+
+{"email":"registro@example.com","nombre":"Registro","password":"Cliente123!","documento":"40555666","telefono":"2615551234"}
+
+### C-02: documento existente, esperado 409 sin filas parciales
+POST {{base}}/auth/registro
+Content-Type: application/json
+
+{"email":"rechazado@example.com","nombre":"Rechazado","password":"Cliente123!","documento":"30111222"}
+
+### Documento ausente, esperado 422
+POST {{base}}/auth/registro
+Content-Type: application/json
+
+{"email":"incompleto@example.com","nombre":"Incompleto","password":"Cliente123!"}
+
+### Sesión ADMIN
+# @name loginAdmin
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"email":"admin@example.com","password":"Admin1234!"}
+
+### C-11: cuatro bujías con stock dos; esperado 409 sin escrituras parciales
+# @no-cookie-jar
+POST {{base}}/ordenes/2/terminar
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-12: reponer, esperado 200 y stock 5
+# @no-cookie-jar
+POST {{base}}/repuestos/3/reponer
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+Content-Type: application/json
+
+{"cantidad":3,"motivo":"Reposición de prueba"}
+
+### C-12: terminar, esperado 200; stock 1 y nuevo movimiento/historial
+# @no-cookie-jar
+POST {{base}}/ordenes/2/terminar
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+
+### C-18: cambiar precio, esperado 200 y una línea nueva
+# @no-cookie-jar
+PATCH {{base}}/repuestos/1
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+Content-Type: application/json
+
+{"precio":"9200.00"}
+
+### C-18: sólo descripción, esperado 200 sin otra línea de precio
+# @no-cookie-jar
+PATCH {{base}}/repuestos/1
+Cookie: {{loginAdmin.response.headers.Set-Cookie}}
+Content-Type: application/json
+
+{"descripcion":"Filtro de prueba"}

@@ -61,11 +61,28 @@
 > - Funciones de hash (`hash_password` y `verificar_password`) asincrónicas usando `asyncio.to_thread` bajo un semáforo (`BCRYPT_CONCURRENCIA`) y costo configurable (`BCRYPT_ROUNDS`).
 > - Cálculo del hash **antes** de abrir la transacción de base de datos.
 > - Tipo `PasswordBcrypt` para campos terminados en bcrypt que limita a un máximo de 72 bytes UTF-8 (retornando 422 si se excede, considerando que una «ñ» ocupa dos bytes).
-> - Contratos de entrada y salida en `app/modules/usuarios/schemas.py`: `RegistroIn` con `email: EmailNormalizado`, `nombre: TextoCorto`, `password: PasswordBcrypt`, `documento: Documento` y `telefono: Telefono`; `LoginOut` con `mensaje`, `debe_cambiar_password` y `expira_en_segundos` (sin token en el cuerpo); `YoOut` con `roles_vigentes` y `roles_token` (nunca `password_hash`).
-> -Separación estricta de capas (`Router -> Service -> UoW -> Repository -> Model`): `UsuarioUnitOfWork` componiendo `usuarios`, `asignaciones` y `clientes` sobre la misma sesión; `AccesoUnitOfWork` con sesión y transacción propias confirmadas siempre y documentadas con su costo (Ejercicio 7).
-> - Orden estricto del login (RN-08, RN-09): 1) verificación de límite de intentos sobre `intento_acceso` dentro de la ventana de 60 s posteriores al último éxito (1 consulta; responde 429 con `Retry-After` sin calcular ningún hash ni anotar el intento bloqueado), 2) lectura corta del usuario y sus roles vigentes, 3) verificación contra el hash del usuario o contra `app.state.hash_ficticio` si el correo no existe o está inactivo, 4) registro del intento en `AccesoUnitOfWork`, 5) 401 «Correo o contraseña incorrectos», 6) emisión de JWT con `sub`, `iat` float, `exp` y `roles` vigentes en cookie `access_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age`, `Secure` configurable).
+> - Contratos de entrada y salida en `app/modules/usuarios/schemas.py`: `RegistroIn` con `email: EmailNormalizado`, `nombre: TextoCorto`, `password: PasswordBcrypt`, `documento: Documento` y `telefono: Telefono`; `LoginOut` con `mensaje`, `debe_cambiar_password` y `expira_en_segundos` (sin token en el cuerpo); `YoOut` (`UsuarioActualOut`) con `roles_vigentes` y `roles_token` (nunca `password_hash`).
+> - Separación estricta de capas (`Router -> Service -> UoW -> Repository -> Model`): `UsuariosUnitOfWork` componiendo `usuarios`, `asignaciones`, `clientes` y `eventos` sobre la misma sesión; `AccesoUnitOfWork` con sesión y transacción propias confirmadas siempre y documentadas con su costo (Ejercicio 7).
+> - Orden estricto del login (RN-08, RN-09): 1) verificación de límite de intentos sobre `intento_acceso` dentro de la ventana de 60 s posteriores al último éxito (responde 429 con `Retry-After` sin calcular ningún hash ni anotar el intento bloqueado), 2) lectura corta del usuario y sus roles vigentes, 3) verificación contra el hash del usuario o contra `app.state.hash_ficticio` si el correo no existe o está inactivo, 4) registro del intento en `AccesoUnitOfWork`, 5) 401 «Correo o contraseña incorrectos», 6) emisión de JWT con `sub`, `iat` float, `exp` y `roles` vigentes en cookie `access_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age`, `Secure` configurable).
 > - Dependencia `get_usuario_actual` en `app/core/dependencies.py` leyendo exclusivamente la cookie `access_token` (nunca `Authorization: Bearer`) y comparando `iat` contra `password_cambiada_en` en microsegundos enteros sin truncar (RN-07).
 > - Casos de prueba C-01 a C-05 en `test/01_auth_y_contratos.http` y suite automatizada en `test_auth.py`.
 
 ## Archivo del change `ej4-autenticacion`
 - Change archivado exitosamente mediante OpenSpec (`openspec archive ej4-autenticacion --yes`) y validado con `openspec validate --specs --strict`.
+
+## Ejercicio 5 · Autorización (Active Stack / OPSX)
+
+> Revisá el código existente y la consigna; aplicá únicamente `ej5-autorizacion` con TDD:
+> identidad desde cookie, roles vigentes en base, control de contraseña en el grupo protegido,
+> administración de personal/roles/eventos, contraseña con invalidación inmediata y acceso
+> propio. Conservá los contratos existentes y registrá las extensiones nuevas. Probá los
+> escenarios con PostgreSQL aislado y savepoints, validá y archivá el change, y dejá un commit
+> local para revisión. No hagas push ni PR hasta la confirmación del usuario.
+
+## 2026-10-30 · Ejercicio 6
+
+Pedido: completar el punto 6 con Active Stack, pruebas antes del código y commit separado,
+sin push ni PR hasta revisión. Se reutilizó `ej6-repositorios-uow`, conservando los
+repositorios ya correctos y completando UoW inyectados, stock centralizado y atomicidad.
+Documento real obligatorio y teléfono opcional como el contrato existente de clientes;
+personal conserva su propio contrato. Evidencia en `docs/validacion-ej5-ej6.md`.
