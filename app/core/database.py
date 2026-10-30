@@ -6,6 +6,7 @@ servidor y falla en las pruebas, o al revés— no señala la causa. El lifespan
 `crear_engine` y `crear_session_factory` y guarda el resultado en `app.state`.
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,12 +17,18 @@ from app.core.config import Settings
 
 
 def crear_engine(settings: Settings) -> AsyncEngine:
+    # SQL_ECHO=true muestra cada consulta en la consola (evidencia de C-15). No se usa
+    # `echo=True`: ese parámetro le agrega a SQLAlchemy un handler propio y, como el registro
+    # de la aplicación ya escribe en la consola, cada consulta salía dos veces. Subir el
+    # nivel del logger alcanza para que salga una sola vez, con el formato de la aplicación.
+    logging.getLogger("sqlalchemy.engine").setLevel(
+        logging.INFO if settings.SQL_ECHO else logging.WARNING
+    )
     return create_async_engine(
         settings.database_url,
         pool_size=settings.DB_POOL_SIZE,
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_pre_ping=True,
-        echo=settings.SQL_ECHO,
     )
 
 

@@ -1,10 +1,11 @@
 """Rutas del módulo de órdenes de trabajo y catálogo de estados."""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.core.dependencies import UsuarioActual, get_usuario_actual, requiere_rol
 from app.core.paginacion import Pagina, ParametrosPagina
 from app.core.tipos import IdPath
+from app.modules.ordenes.avisos import avisar_cliente
 from app.modules.ordenes.models import EstadoOrdenCodigo
 from app.modules.ordenes.schemas import (
     EstadoOrdenOut,
@@ -81,12 +82,24 @@ async def iniciar_orden(
 @router.post("/ordenes/{id}/terminar", response_model=OrdenDetalleOut)
 async def terminar_orden(
     id: IdPath,
+    background_tasks: BackgroundTasks,
     actual: UsuarioActual = Depends(get_usuario_actual),
     uow: OrdenesUnitOfWork = Depends(get_ordenes_uow),
 ) -> OrdenDetalleOut:
-    return await service.terminar_orden(
+    detalle = await service.terminar_orden(
         uow, id, usuario_id=actual.usuario.id, roles=actual.roles
     )
+    # Llegar a esta línea quiere decir que el servicio salió de su `async with uow` sin
+    # excepción: la terminación YA se confirmó. Si falló (403, 409, o el commit), la
+    # excepción salta esta línea y no se agenda nada. El aviso corre después de enviar
+    # la respuesta, con datos sueltos y no con objetos del ORM.
+    background_tasks.add_task(
+        avisar_cliente,
+        orden_id=detalle.id,
+        cliente=detalle.cliente.nombre,
+        patente=detalle.patente,
+    )
+    return detalle
 
 
 @router.post("/ordenes/{id}/cancelar", response_model=OrdenDetalleOut)

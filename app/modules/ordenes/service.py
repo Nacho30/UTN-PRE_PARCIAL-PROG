@@ -171,15 +171,15 @@ class OrdenesService:
             if not vehiculo:
                 raise ErrorConflicto("El vehículo no existe o fue dado de baja")
 
-            # C-10 y RN-10: Verificar repuestos vigentes y copiar precio_unitario
-            repuestos_map = {}
-            for item_in in payload.items:
-                rep = await uow.repuestos.get_by_id(item_in.repuesto_id)
-                if not rep:
-                    raise ErrorConflicto(
-                        "Uno o más repuestos no existen o fueron dados de baja"
-                    )
-                repuestos_map[item_in.repuesto_id] = rep
+            # C-10 y RN-10: Verificar repuestos vigentes y copiar precio_unitario.
+            # Todos en una sola consulta, no uno por ítem (ejercicio 8).
+            repuestos_map = await uow.repuestos.get_vigentes_por_ids(
+                [it.repuesto_id for it in payload.items]
+            )
+            if len(repuestos_map) != len(payload.items):
+                raise ErrorConflicto(
+                    "Uno o más repuestos no existen o fueron dados de baja"
+                )
 
             total = sum(
                 (
@@ -270,13 +270,15 @@ class OrdenesService:
                     f"La orden no está en estado EN_REPARACION (estado actual: {orden.estado})"
                 )
 
-            # RN-13: Verificar y descontar stock de cada ítem con MovimientoStock
+            # RN-13: Verificar y descontar stock de cada ítem con MovimientoStock.
+            # `get_detalle` ya trajo el repuesto de cada ítem (recién leído, con
+            # populate_existing): no se vuelve a pedir uno por uno. El UPDATE condicionado
+            # de `stock.mover` es el que garantiza el stock; esto sólo da el mensaje claro.
             for it in orden.items:
-                rep = await uow.repuestos.get_by_id(it.repuesto_id)
-                if not rep or rep.stock < it.cantidad:
-                    codigo = it.repuesto.codigo if it.repuesto else str(it.repuesto_id)
+                rep = it.repuesto
+                if rep.borrado_en is not None or rep.stock < it.cantidad:
                     raise ErrorConflicto(
-                        f"Stock insuficiente para el repuesto {codigo}"
+                        f"Stock insuficiente para el repuesto {rep.codigo}"
                     )
 
                 await uow.stock.mover(

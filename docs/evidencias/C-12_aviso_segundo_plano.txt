@@ -1,0 +1,24 @@
+C-11 y C-12 · Terminar la orden 2 (pide 4 bujías y hay 2), reponer y volver a terminar.
+Servidor: SQL_ECHO=true uvicorn main:app   ·   PostgreSQL 16, después de python seed.py
+
+- El primer intento da 409 y en el registro NO aparece ningún aviso: sólo se agenda si
+  la operación se confirmó.
+- Después de reponer, la terminación hace COMMIT, la respuesta 200 sale, y medio segundo
+  después (await asyncio.sleep(0.5)) aparece el aviso: corre después de la respuesta.
+
+2026-10-30 14:10:21,716 COMMIT
+2026-10-30 14:10:21,885 ROLLBACK
+INFO:     127.0.0.1:35688 - "POST /ordenes/2/terminar HTTP/1.1" 409 Conflict
+2026-10-30 14:10:21,905 COMMIT
+2026-10-30 14:10:21,917 UPDATE repuesto SET stock=(repuesto.stock + $1::INTEGER) WHERE repuesto.id = $2::INTEGER AND repuesto.borrado_en IS NULL AND repuesto.stock + $3::INTEGER >= $4::INTEGER RETURNING repuesto.stock
+2026-10-30 14:10:21,922 INSERT INTO movimiento_stock (repuesto_id, orden_id, usuario_id, cantidad, motivo, cuando) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::INTEGER, $5::VARCHAR, $6::TIMESTAMP WITH TIME ZONE) RETURNING movimiento_stock.id
+2026-10-30 14:10:21,925 COMMIT
+INFO:     127.0.0.1:35690 - "POST /repuestos/3/reponer HTTP/1.1" 200 OK
+2026-10-30 14:10:21,942 COMMIT
+2026-10-30 14:10:21,950 UPDATE repuesto SET stock=(repuesto.stock + $1::INTEGER) WHERE repuesto.id = $2::INTEGER AND repuesto.borrado_en IS NULL AND repuesto.stock + $3::INTEGER >= $4::INTEGER RETURNING repuesto.stock
+2026-10-30 14:10:21,952 INSERT INTO movimiento_stock (repuesto_id, orden_id, usuario_id, cantidad, motivo, cuando) VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::INTEGER, $5::VARCHAR, $6::TIMESTAMP WITH TIME ZONE) RETURNING movimiento_stock.id
+2026-10-30 14:10:21,954 UPDATE orden_trabajo SET estado=$1::VARCHAR WHERE orden_trabajo.id = $2::INTEGER
+2026-10-30 14:10:21,958 INSERT INTO historial_estado_orden (orden_id, desde_estado, hasta_estado, usuario_id, cuando) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::INTEGER, $5::TIMESTAMP WITH TIME ZONE) RETURNING historial_estado_orden.id
+2026-10-30 14:10:21,965 COMMIT
+INFO:     127.0.0.1:35702 - "POST /ordenes/2/terminar HTTP/1.1" 200 OK
+2026-10-30 14:10:22,468 INFO taller.avisos: Aviso enviado a Jorge Pérez: la orden 2 del vehículo AD789GH está terminada

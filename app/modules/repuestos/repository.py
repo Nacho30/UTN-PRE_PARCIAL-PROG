@@ -36,6 +36,17 @@ class RepuestoRepository(SoftDeleteRepository[Repuesto]):
         items = list((await self.session.execute(stmt_items)).scalars().all())
         return items, total
 
+    async def get_vigentes_por_ids(self, ids: list[int]) -> dict[int, Repuesto]:
+        """Los repuestos vigentes de esa lista, en UNA consulta (`WHERE id IN (...)`).
+
+        Lo usa el alta de una orden: pedirlos de a uno con `get_by_id` haría una consulta
+        por ítem (N+1). Los ids que falten en el diccionario no existen o están de baja.
+        """
+        if not ids:
+            return {}
+        stmt = select(Repuesto).where(Repuesto.id.in_(ids), Repuesto.borrado_en.is_(None))
+        return {r.id: r for r in (await self.session.execute(stmt)).scalars().all()}
+
     async def get_by_codigo_vigente(self, codigo: str) -> Repuesto | None:
         stmt = select(Repuesto).where(
             Repuesto.codigo == codigo,

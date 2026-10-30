@@ -3,7 +3,7 @@
 from typing import Sequence
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.repository import BaseRepository
 from app.modules.clientes.models import Cliente, Vehiculo
@@ -61,13 +61,29 @@ class OrdenTrabajoRepository(BaseRepository[OrdenTrabajo]):
         return list((await self.session.execute(stmt)).scalars().all()), total
 
     async def get_detalle(self, id: int) -> OrdenTrabajo | None:
+        """La orden con todo lo que muestra su detalle, en CUATRO consultas fijas (C-15).
+
+        1. orden + vehículo + cliente, en un JOIN: son muchos-a-uno, una fila cada uno, y
+           `joinedload` los trae sin multiplicar filas. `innerjoin`: las claves no son nulas.
+        2. los ítems de la orden (`selectinload`: un `IN` con el id de la orden).
+        3. el repuesto de cada ítem, todos juntos en un solo `IN`.
+        4. el historial de estados.
+
+        Con `joinedload` en las colecciones (ítems, historial) el JOIN repetiría la orden
+        por cada ítem × cada línea de historial; `selectinload` las trae aparte y sin
+        duplicar. Ninguna cuenta depende de cuántos ítems haya: con 2 o con 40, son cuatro.
+        Las relaciones están en `raise_on_sql`, así que si el mapeo leyera algo que no está
+        acá, falla en lugar de consultar en silencio.
+        """
         stmt = (
             select(OrdenTrabajo)
             .where(OrdenTrabajo.id == id)
             # Refrescar colecciones ya cargadas tras agregar el historial en este UoW.
             .execution_options(populate_existing=True)
             .options(
-                selectinload(OrdenTrabajo.vehiculo).selectinload(Vehiculo.cliente),
+                joinedload(OrdenTrabajo.vehiculo, innerjoin=True).joinedload(
+                    Vehiculo.cliente, innerjoin=True
+                ),
                 selectinload(OrdenTrabajo.items).selectinload(ItemOrden.repuesto),
                 selectinload(OrdenTrabajo.historial),
             )

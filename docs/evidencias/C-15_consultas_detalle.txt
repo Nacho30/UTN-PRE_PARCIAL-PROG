@@ -1,0 +1,74 @@
+C-15 · Detalle de una orden con 2 ítems (orden 3) y con 4 ítems (orden 4).
+Servidor: SQL_ECHO=true uvicorn main:app   ·   PostgreSQL 16, después de python seed.py
+Las órdenes 3 y 4 se crearon antes con POST /ordenes (2 y 4 ítems) como admin@example.com.
+
+Resultado: la misma cantidad de consultas en las dos, 6 SELECT:
+  - 2 de la autenticación, que corren en toda ruta protegida: el usuario y sus roles
+    vigentes en la base (RN-04);
+  - 4 del detalle: orden + vehículo + cliente en un JOIN, los ítems, los repuestos de
+    todos los ítems en un solo IN, y el historial.
+Entre las dos sólo cambian los parámetros del IN de repuestos: (2, 4) contra (1, 2, 3, 4).
+
+=================== GET /ordenes/3 ===================
+SELECT: 6
+BEGIN (implicit)
+SELECT usuario.id, usuario.email, usuario.nombre, usuario.password_hash, usuario.activo, usuario.debe_cambiar_password, usuario.password_cambiada_en 
+FROM usuario 
+WHERE usuario.email = $1::VARCHAR
+[cached since 0.176s ago] ('admin@example.com',)
+SELECT asignacion_rol.rol 
+FROM asignacion_rol 
+WHERE asignacion_rol.usuario_id = $1::INTEGER AND asignacion_rol.revocada_en IS NULL AND asignacion_rol.desde <= $2::TIMESTAMP WITH TIME ZONE AND (asignacion_rol.vence_en IS NULL OR asignacion_rol.vence_en > $3::TIMESTAMP WITH TIME ZONE) ORDER BY asignacion_rol.rol
+[cached since 0.1748s ago] (1, datetime.datetime(2026, 10, 30, 14, 9, 54, 916277, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 30, 14, 9, 54, 916277, tzinfo=datetime.timezone.utc))
+COMMIT
+BEGIN (implicit)
+SELECT orden_trabajo.id, orden_trabajo.vehiculo_id, orden_trabajo.mecanico_id, orden_trabajo.estado, orden_trabajo.falla, orden_trabajo.creada_en, orden_trabajo.total, cliente_1.id AS id_1, cliente_1.usuario_id, cliente_1.nombre, cliente_1.documento, cliente_1.telefono, vehiculo_1.id AS id_2, vehiculo_1.cliente_id, vehiculo_1.patente, vehiculo_1.marca, vehiculo_1.modelo, vehiculo_1.anio, vehiculo_1.borrado_en 
+FROM orden_trabajo JOIN vehiculo AS vehiculo_1 ON vehiculo_1.id = orden_trabajo.vehiculo_id JOIN cliente AS cliente_1 ON cliente_1.id = vehiculo_1.cliente_id 
+WHERE orden_trabajo.id = $1::INTEGER
+[cached since 0.06635s ago] (3,)
+SELECT historial_estado_orden.orden_id, historial_estado_orden.id, historial_estado_orden.desde_estado, historial_estado_orden.hasta_estado, historial_estado_orden.usuario_id, historial_estado_orden.cuando 
+FROM historial_estado_orden 
+WHERE historial_estado_orden.orden_id IN ($1::INTEGER) ORDER BY historial_estado_orden.id
+[cached since 0.06448s ago] (3,)
+SELECT item_orden.orden_id, item_orden.id, item_orden.repuesto_id, item_orden.cantidad, item_orden.precio_unitario 
+FROM item_orden 
+WHERE item_orden.orden_id IN ($1::INTEGER) ORDER BY item_orden.id
+[cached since 0.06238s ago] (3,)
+SELECT repuesto.id, repuesto.codigo, repuesto.descripcion, repuesto.precio, repuesto.stock, repuesto.borrado_en 
+FROM repuesto 
+WHERE repuesto.id IN ($1::INTEGER, $2::INTEGER)
+[cached since 0.06137s ago] (2, 4)
+COMMIT
+INFO:     127.0.0.1:50248 - "GET /ordenes/3 HTTP/1.1" 200 OK
+
+=================== GET /ordenes/4 ===================
+SELECT: 6
+BEGIN (implicit)
+SELECT usuario.id, usuario.email, usuario.nombre, usuario.password_hash, usuario.activo, usuario.debe_cambiar_password, usuario.password_cambiada_en 
+FROM usuario 
+WHERE usuario.email = $1::VARCHAR
+[cached since 0.1982s ago] ('admin@example.com',)
+SELECT asignacion_rol.rol 
+FROM asignacion_rol 
+WHERE asignacion_rol.usuario_id = $1::INTEGER AND asignacion_rol.revocada_en IS NULL AND asignacion_rol.desde <= $2::TIMESTAMP WITH TIME ZONE AND (asignacion_rol.vence_en IS NULL OR asignacion_rol.vence_en > $3::TIMESTAMP WITH TIME ZONE) ORDER BY asignacion_rol.rol
+[cached since 0.1971s ago] (1, datetime.datetime(2026, 10, 30, 14, 9, 54, 938603, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 30, 14, 9, 54, 938603, tzinfo=datetime.timezone.utc))
+COMMIT
+BEGIN (implicit)
+SELECT orden_trabajo.id, orden_trabajo.vehiculo_id, orden_trabajo.mecanico_id, orden_trabajo.estado, orden_trabajo.falla, orden_trabajo.creada_en, orden_trabajo.total, cliente_1.id AS id_1, cliente_1.usuario_id, cliente_1.nombre, cliente_1.documento, cliente_1.telefono, vehiculo_1.id AS id_2, vehiculo_1.cliente_id, vehiculo_1.patente, vehiculo_1.marca, vehiculo_1.modelo, vehiculo_1.anio, vehiculo_1.borrado_en 
+FROM orden_trabajo JOIN vehiculo AS vehiculo_1 ON vehiculo_1.id = orden_trabajo.vehiculo_id JOIN cliente AS cliente_1 ON cliente_1.id = vehiculo_1.cliente_id 
+WHERE orden_trabajo.id = $1::INTEGER
+[cached since 0.08846s ago] (4,)
+SELECT historial_estado_orden.orden_id, historial_estado_orden.id, historial_estado_orden.desde_estado, historial_estado_orden.hasta_estado, historial_estado_orden.usuario_id, historial_estado_orden.cuando 
+FROM historial_estado_orden 
+WHERE historial_estado_orden.orden_id IN ($1::INTEGER) ORDER BY historial_estado_orden.id
+[cached since 0.08629s ago] (4,)
+SELECT item_orden.orden_id, item_orden.id, item_orden.repuesto_id, item_orden.cantidad, item_orden.precio_unitario 
+FROM item_orden 
+WHERE item_orden.orden_id IN ($1::INTEGER) ORDER BY item_orden.id
+[cached since 0.08412s ago] (4,)
+SELECT repuesto.id, repuesto.codigo, repuesto.descripcion, repuesto.precio, repuesto.stock, repuesto.borrado_en 
+FROM repuesto 
+WHERE repuesto.id IN ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::INTEGER)
+[cached since 0.08313s ago] (1, 2, 3, 4)
+COMMIT
+INFO:     127.0.0.1:50252 - "GET /ordenes/4 HTTP/1.1" 200 OK
